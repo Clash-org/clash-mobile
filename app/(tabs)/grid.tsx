@@ -27,7 +27,6 @@ import {
   doubleHitsAtom,
   duelsAtom,
   fighterPairsAtom,
-  groupBattleScoresAtom,
   isGroupBattleAtom,
   isPoolEndAtom,
   isPoolRatingAtom,
@@ -70,7 +69,6 @@ const { width } = Dimensions.get("window");
 export default function TournamentGridScreen() {
   const { t } = useTranslation();
   const [isGroupBattle] = useAtom(isGroupBattleAtom);
-  const [groupBattleScores] = useAtom(groupBattleScoresAtom);
   const [currentTournament] = useAtom(currentTournamentAtom);
   const [currentWeaponId] = useAtom(currentWeaponIdAtom);
   const [currentNominationId] = useAtom(currentNominationIdAtom);
@@ -88,8 +86,8 @@ export default function TournamentGridScreen() {
   const [, setProtests2] = useAtom(protests2Atom);
   const [, setWarnings1] = useAtom(warnings1Atom);
   const [, setWarnings2] = useAtom(warnings2Atom);
-  const [, setScore1] = useAtom(score1Atom);
-  const [, setScore2] = useAtom(score2Atom);
+  const [score1, setScore1] = useAtom(score1Atom);
+  const [score2, setScore2] = useAtom(score2Atom);
   const [playoff, setPlayoff] = useAtom(playoffAtom);
   const [isEnd, setIsEnd] = useAtom(isPoolEndAtom);
   const [showRank, setShowRank] = useState(false);
@@ -300,12 +298,14 @@ export default function TournamentGridScreen() {
     }
 
     setDoubleHits(0);
-    setProtests1(0);
-    setProtests2(0);
-    setWarnings1(0);
-    setWarnings2(0);
-    setScore1(0);
-    setScore2(0);
+    if (!isGroupBattle) {
+      setProtests1(0);
+      setProtests2(0);
+      setWarnings1(0);
+      setWarnings2(0);
+      setScore1(0);
+      setScore2(0);
+    }
   };
 
   const getDataTable = (data: ParticipantType[][]) => {
@@ -421,11 +421,7 @@ export default function TournamentGridScreen() {
         tournamentSystem !== TournamentSystem.HYBRID && (
           <View style={styles.groupWinnerContainer}>
             <Text style={styles.groupWinnerText}>
-              🏆{" "}
-              {groupBattleScores.red > groupBattleScores.blue
-                ? t("redTeam")
-                : t("blueTeam")}{" "}
-              🏆
+              🏆 {score1 > score2 ? t("redTeam") : t("blueTeam")} 🏆
             </Text>
           </View>
         )}

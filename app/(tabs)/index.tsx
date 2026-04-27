@@ -10,6 +10,8 @@ import {
   ClockCheck,
   CloudUpload,
   Minus,
+  Pause,
+  Play,
   Plus,
   RefreshCw,
   Save,
@@ -230,7 +232,8 @@ function PoolDetailModal({
 export default function SettingsScreen() {
   const { t } = useTranslation();
   const bellPlayerRef = useRef<AudioPlayer | null>(null);
-  const { playBellSound, deleteCustomSounds } = useBellSound();
+  const { playSound, deleteCustomSounds, stopSound, soundUpdate } =
+    useBellSound();
 
   /* ---------- атомы ---------- */
   const [user] = useAtom(userAtom);
@@ -285,11 +288,11 @@ export default function SettingsScreen() {
   const [currentModeratorId, setCurrentModeratorId] = useState("");
   const [newName, setNewName] = useState("");
   const [showUpdates, setShowUpdates] = useState(true);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [selectedPoolModal, setSelectedPoolModal] = useState<number | null>(
     null,
   );
+  const [isBellPlaying, setIsBellPlaying] = useState(false);
 
   const systems = [
     { label: t("hybridSystem"), value: TournamentSystem.HYBRID.toString() },
@@ -442,11 +445,6 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     loadSettings();
-    return () => {
-      if (sound) {
-        sound.unloadAsync();
-      }
-    };
   }, []);
 
   /* ---------- загрузка настроек ---------- */
@@ -788,6 +786,7 @@ export default function SettingsScreen() {
 
       // Сохраняем путь в AsyncStorage
       await AsyncStorage.setItem(`${type}Sound`, destFile.uri);
+      await soundUpdate(type);
 
       Toast.show({ type: "success", text1: t("fileImportSuccess") });
     } catch (err) {
@@ -871,6 +870,13 @@ export default function SettingsScreen() {
 
     return { hours, minutes, seconds };
   };
+
+  useEffect(() => {
+    if (isBellPlaying) {
+      const id = setTimeout(() => setIsBellPlaying(false), 5000);
+      return () => clearTimeout(id);
+    }
+  }, [isBellPlaying]);
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
@@ -1013,7 +1019,7 @@ export default function SettingsScreen() {
             <TextInput
               style={styles.input}
               placeholder={t("name")}
-              placeholderTextColor="#666"
+              placeholderTextColor={Colors.placeholder}
               value={newName}
               onChangeText={setNewName}
             />
@@ -1221,11 +1227,19 @@ export default function SettingsScreen() {
             }}
           />
           <Button
-            title={t("testSound")}
-            onPress={() => playBellSound("bell")}
+            onPress={async () => {
+              setIsBellPlaying(!isBellPlaying);
+              !isBellPlaying ? await playSound() : await stopSound();
+            }}
             style={styles.button}
             stroke
-          />
+          >
+            {isBellPlaying ? (
+              <Pause size={20} color={Colors.fg} />
+            ) : (
+              <Play size={20} color={Colors.fg} />
+            )}
+          </Button>
           <Button
             title={t("reset")}
             onPress={() => deleteCustomSounds("all")}

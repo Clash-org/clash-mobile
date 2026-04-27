@@ -21,7 +21,6 @@ import {
   doubleHitsAtom,
   fighterPairsAtom,
   fightTimeAtom,
-  groupBattleScoresAtom,
   historyAtom,
   hitZonesAtom,
   isGroupBattleAtom,
@@ -53,11 +52,8 @@ import Toast from "react-native-toast-message";
 
 export default function FightScreen() {
   const { t } = useTranslation();
-  const { playBellSound, stopBellSound } = useBellSound();
+  const { playSound, stopSound } = useBellSound();
   const [isGroupBattle] = useAtom(isGroupBattleAtom);
-  const [groupBattleScores, setGroupBattleScores] = useAtom(
-    groupBattleScoresAtom,
-  );
   const [currentPairIndex, setCurrentPairIndex] = useAtom(currentPairIndexAtom);
   const [currentPoolIndex] = useAtom(currentPoolIndexAtom);
   const [isRunning, setIsRunning] = useAtom(isRunningAtom);
@@ -87,15 +83,6 @@ export default function FightScreen() {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const prevPairIndexRef = useRef(currentPairIndex);
-
-  const setGroupScore = (side: "red" | "blue") => {
-    return (score: number) =>
-      setGroupBattleScores((state) => {
-        const buf = { ...state };
-        buf[side] += score;
-        return buf;
-      });
-  };
 
   const getFighterData = () => {
     let name1 = "",
@@ -148,9 +135,7 @@ export default function FightScreen() {
 
   const fightStop = async () => {
     setIsRunning(false);
-    const isDraw = isGroupBattle
-      ? groupBattleScores.red === groupBattleScores.blue
-      : score1 === score2;
+    const isDraw = score1 === score2;
 
     const changePlayoffScores = () => {
       setPlayoff((state) => {
@@ -172,45 +157,12 @@ export default function FightScreen() {
     };
 
     if (!isDraw) {
-      if (isGroupBattle) {
-        if (groupBattleScores.red > groupBattleScores.blue) {
-          incWin(
-            groupBattleScores.red,
-            fighterId1,
-            fighterId2,
-            currentPairIndex[currentPoolIndex],
-            currentPoolIndex,
-            setFighterPairs,
-            warnings1,
-            protests1,
-            doubleHits,
-          );
-          incWin(
-            groupBattleScores.blue,
-            fighterId2,
-            fighterId1,
-            currentPairIndex[currentPoolIndex],
-            currentPoolIndex,
-            setFighterPairs,
-            warnings2,
-            protests2,
-            doubleHits,
-            true,
-          );
+      if (score1 > score2) {
+        if (isPlayoff) {
+          changePlayoffScores();
         } else {
           incWin(
-            groupBattleScores.blue,
-            fighterId2,
-            fighterId1,
-            currentPairIndex[currentPoolIndex],
-            currentPoolIndex,
-            setFighterPairs,
-            warnings2,
-            protests2,
-            doubleHits,
-          );
-          incWin(
-            groupBattleScores.red,
+            score1,
             fighterId1,
             fighterId2,
             currentPairIndex[currentPoolIndex],
@@ -218,67 +170,48 @@ export default function FightScreen() {
             setFighterPairs,
             warnings1,
             protests1,
+            doubleHits,
+          );
+          incWin(
+            score2,
+            fighterId2,
+            fighterId1,
+            currentPairIndex[currentPoolIndex],
+            currentPoolIndex,
+            setFighterPairs,
+            warnings2,
+            protests2,
             doubleHits,
             true,
           );
         }
       } else {
-        if (score1 > score2) {
-          if (isPlayoff) {
-            changePlayoffScores();
-          } else {
-            incWin(
-              score1,
-              fighterId1,
-              fighterId2,
-              currentPairIndex[currentPoolIndex],
-              currentPoolIndex,
-              setFighterPairs,
-              warnings1,
-              protests1,
-              doubleHits,
-            );
-            incWin(
-              score2,
-              fighterId2,
-              fighterId1,
-              currentPairIndex[currentPoolIndex],
-              currentPoolIndex,
-              setFighterPairs,
-              warnings2,
-              protests2,
-              doubleHits,
-              true,
-            );
-          }
+        if (isPlayoff) {
+          changePlayoffScores();
         } else {
-          if (isPlayoff) {
-            changePlayoffScores();
-          } else {
-            incWin(
-              score2,
-              fighterId2,
-              fighterId1,
-              currentPairIndex[currentPoolIndex],
-              currentPoolIndex,
-              setFighterPairs,
-              warnings2,
-              protests2,
-              doubleHits,
-            );
-            incWin(
-              score1,
-              fighterId1,
-              fighterId2,
-              currentPairIndex[currentPoolIndex],
-              currentPoolIndex,
-              setFighterPairs,
-              warnings1,
-              protests1,
-              doubleHits,
-              true,
-            );
-          }
+          incWin(
+            score2,
+            fighterId2,
+            fighterId1,
+            currentPairIndex[currentPoolIndex],
+            currentPoolIndex,
+            setFighterPairs,
+            warnings2,
+            protests2,
+            doubleHits,
+          );
+          incWin(
+            score1,
+            fighterId1,
+            fighterId2,
+            currentPairIndex[currentPoolIndex],
+            currentPoolIndex,
+            setFighterPairs,
+            warnings1,
+            protests1,
+            doubleHits,
+            true,
+          );
         }
       }
     } else {
@@ -345,7 +278,7 @@ export default function FightScreen() {
           }
 
           if (next === 0) {
-            playBellSound("bell");
+            playSound();
             fightStop();
             return fightTime;
           }
@@ -362,52 +295,38 @@ export default function FightScreen() {
   }, [isRunning, timeLeft]);
 
   const resetFight = () => {
-    setScore1(0);
-    setScore2(0);
+    if (!isGroupBattle) {
+      setScore1(0);
+      setScore2(0);
+      setProtests1(0);
+      setProtests2(0);
+      setWarnings1(0);
+      setWarnings2(0);
+    }
     setDoubleHits(0);
-    setProtests1(0);
-    setProtests2(0);
-    setWarnings1(0);
-    setWarnings2(0);
     setTimeLeft(fightTime);
     setIsRunning(false);
     setHistory([]);
     setIsFinished(false);
     setWinner("");
-    stopBellSound("bell");
+    stopSound();
   };
 
   const addPoints = useCallback(
     (
-      setter:
-        | ((score: number) => void)
-        | React.Dispatch<React.SetStateAction<number>>,
+      setter: React.Dispatch<React.SetStateAction<number>>,
       zone: keyof typeof hitZones,
     ) => {
       const p = hitZones[zone];
-      if (isGroupBattle) {
-        (setter as (score: number) => void)(p);
-      } else {
-        (setter as React.Dispatch<React.SetStateAction<number>>)(
-          (s: number) => s + p,
-        );
-      }
+      setter((s: number) => s + p);
     },
     [hitZones, isGroupBattle],
   );
 
   const removePoints = (
-    setter:
-      | ((score: number) => void)
-      | React.Dispatch<React.SetStateAction<number>>,
+    setter: React.Dispatch<React.SetStateAction<number>>,
   ) => {
-    if (isGroupBattle) {
-      (setter as (score: number) => void)(-1);
-    } else {
-      (setter as React.Dispatch<React.SetStateAction<number>>)((s: number) =>
-        Math.max(0, s - 1),
-      );
-    }
+    setter((s: number) => Math.max(0, s - 1));
   };
 
   useEffect(() => {
@@ -416,12 +335,7 @@ export default function FightScreen() {
     }
     if (score1 !== 0 || score2 !== 0) {
       timeoutRef.current = setTimeout(() => {
-        setHistory((prev) => [
-          ...prev,
-          isGroupBattle
-            ? { score1: groupBattleScores.red, score2: groupBattleScores.blue }
-            : { score1, score2 },
-        ]);
+        setHistory((prev) => [...prev, { score1, score2 }]);
       }, 3000);
     }
     return () => {
@@ -429,7 +343,7 @@ export default function FightScreen() {
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [score1, score2, groupBattleScores.red, groupBattleScores.blue]);
+  }, [score1, score2]);
 
   useEffect(() => {
     setTimeLeft(fightTime);
@@ -448,8 +362,8 @@ export default function FightScreen() {
   const fighterData = [
     {
       name: redName,
-      score: isGroupBattle ? groupBattleScores.red : score1,
-      setScore: isGroupBattle ? setGroupScore("red") : setScore1,
+      score: score1,
+      setScore: setScore1,
       protests: protests1,
       setProtests: setProtests1,
       warnings: warnings1,
@@ -458,8 +372,8 @@ export default function FightScreen() {
     },
     {
       name: blueName,
-      score: isGroupBattle ? groupBattleScores.blue : score2,
-      setScore: isGroupBattle ? setGroupScore("blue") : setScore2,
+      score: score2,
+      setScore: setScore2,
       protests: protests2,
       setProtests: setProtests2,
       warnings: warnings2,

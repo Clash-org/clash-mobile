@@ -104,8 +104,6 @@ export const currentPoolIdAtom = atom<number>();
 
 export const isGroupBattleAtom = atom(false);
 
-export const groupBattleScoresAtom = atom({ red: 0, blue: 0 });
-
 export const blockchainAtom = atom({
   wallet: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
   privateKey:

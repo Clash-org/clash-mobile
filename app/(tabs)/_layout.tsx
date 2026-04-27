@@ -77,7 +77,14 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="tournaments"
+        name="tournaments/[id]"
+        options={{
+          href: null,
+          title: "Tournaments",
+        }}
+      />
+      <Tabs.Screen
+        name="tournaments/index"
         options={{
           href: null,
           title: "Tournaments",

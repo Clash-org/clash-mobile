@@ -11,7 +11,7 @@ export const Colors = {
   fg: "#FFFFFF",
   surface: "#221D1A",
   surface2: "#222222",
-  placeholder: "#FFFFFF80",
+  placeholder: "#8F8F8F",
   accentRgb: "253, 80, 3",
 } as const;
 

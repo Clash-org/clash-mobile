@@ -8,7 +8,6 @@ import { GripVertical, Trash2 } from "lucide-react-native";
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -22,6 +21,7 @@ import DraggableFlatList, {
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Button from "../ui/Button";
 import Section from "../ui/Section";
+import ModalWindow from "./ModalWindow";
 
 type SelectPairProps = {
   poolIndex: number;
@@ -51,29 +51,19 @@ export default function SelectPair({
   const { t } = useTranslation();
   const isGroupBattle = useAtomValue(isGroupBattleAtom);
   const [dragging, setDragging] = useState(false);
+  const [isDelete, setIsDelete] = useState(
+    new Array<boolean>(fighterPairs[poolIndex].length).fill(false),
+  );
 
   const handleDeletePair = (
     pair: [ParticipantType, ParticipantType],
     originalIdx: number,
   ) => {
-    Alert.alert(
-      t("confirmDelete") || "Удалить пару",
-      t("deletePairConfirm") || "Вы уверены, что хотите удалить эту пару?",
-      [
-        { text: t("cancel") || "Отмена", style: "cancel" },
-        {
-          text: t("delete") || "Удалить",
-          style: "destructive",
-          onPress: () => {
-            const buf = [...fighterPairs];
-            buf[poolIndex] = buf[poolIndex].filter((_, i) => i !== originalIdx);
-            onPairsReordered?.(buf);
-            setPools?.(buf);
-            onDeletePair?.(pair[0].id, pair[1].id);
-          },
-        },
-      ],
-    );
+    const buf = [...fighterPairs];
+    buf[poolIndex] = buf[poolIndex].filter((_, i) => i !== originalIdx);
+    onPairsReordered?.(buf);
+    setPools?.(buf);
+    onDeletePair?.(pair[0].id, pair[1].id);
   };
 
   const handleDragEnd = ({
@@ -183,12 +173,35 @@ export default function SelectPair({
             </View>
 
             {onDeletePair && onPairsReordered && setPools && (
-              <TouchableOpacity
-                style={styles.deleteButton}
-                onPress={() => handleDeletePair(item, index)}
-              >
-                <Trash2 size={20} color={Colors.placeholder} />
-              </TouchableOpacity>
+              <>
+                <TouchableOpacity
+                  style={styles.deleteButton}
+                  onPress={() =>
+                    setIsDelete((state) => {
+                      const buf = [...state];
+                      buf[index] = true;
+                      return buf;
+                    })
+                  }
+                >
+                  <Trash2 size={20} color={Colors.placeholder} />
+                </TouchableOpacity>
+                <ModalWindow
+                  title={t("realyDelete")}
+                  isOpen={isDelete[index]}
+                  onClose={() =>
+                    setIsDelete((state) => {
+                      const buf = [...state];
+                      buf[index] = false;
+                      return buf;
+                    })
+                  }
+                >
+                  <Button onPress={() => handleDeletePair(item, index)}>
+                    <Trash2 color={Colors.fg} size={20} />
+                  </Button>
+                </ModalWindow>
+              </>
             )}
           </View>
         </TouchableOpacity>
