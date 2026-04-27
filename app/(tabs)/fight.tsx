@@ -45,6 +45,7 @@ import {
   Minus,
   Pause,
   Play,
+  Plus,
   RefreshCw,
   UsersRound,
 } from "lucide-react-native";
@@ -320,7 +321,7 @@ export default function FightScreen() {
       const p = hitZones[zone];
       setter((s: number) => s + p);
     },
-    [hitZones, isGroupBattle],
+    [hitZones],
   );
 
   const removePoints = (
@@ -416,12 +417,20 @@ export default function FightScreen() {
             </TouchableOpacity>
           ))}
 
-          <TouchableOpacity
-            style={styles.zoneBtn}
-            onPress={() => removePoints(data.setScore)}
-          >
-            <Minus size={28} color={Colors.fg} />
-          </TouchableOpacity>
+          <View style={styles.plusMinusWrap}>
+            <TouchableOpacity
+              style={[styles.zoneBtn, styles.zoneBtnZero]}
+              onPress={() => removePoints(data.setScore)}
+            >
+              <Minus size={28} color={Colors.fg} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.zoneBtn, styles.zoneBtnZero]}
+              onPress={() => data.setScore((s) => s + 1)}
+            >
+              <Plus size={28} color={Colors.fg} />
+            </TouchableOpacity>
+          </View>
 
           <View style={styles.warnings}>
             <Counter
@@ -602,6 +611,11 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bold,
     marginTop: -20,
   },
+  plusMinusWrap: {
+    display: "flex",
+    flexDirection: "row",
+    gap: 5,
+  },
   zoneBtn: {
     backgroundColor: "rgba(255, 255, 255, 0.08)",
     borderRadius: 24,
@@ -610,6 +624,10 @@ const styles = StyleSheet.create({
     marginVertical: 4,
     minWidth: 120,
     alignItems: "center",
+  },
+  zoneBtnZero: {
+    minWidth: "auto",
+    paddingHorizontal: 13,
   },
   zoneTxt: {
     fontFamily: Fonts.regular,
