@@ -1,5 +1,4 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { AudioPlayer } from "expo-audio";
 import * as DocumentPicker from "expo-document-picker";
 import { Directory, File, Paths } from "expo-file-system";
 import { useAtom } from "jotai";
@@ -18,7 +17,7 @@ import {
   Trash2,
   X,
 } from "lucide-react-native";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   FlatList,
@@ -50,7 +49,7 @@ import {
 } from "@/hooks/useTournaments";
 import { createPool, getMathes, updatePool } from "@/utils/api";
 import { generatePairs } from "@/utils/generatePairs";
-import { generateId, getName } from "@/utils/helpers";
+import { generateId, getName, isPoolEndByDuels } from "@/utils/helpers";
 import { importExcel } from "@/utils/importExcel";
 
 // Атомы
@@ -78,6 +77,8 @@ import {
   isGroupBattleAtom,
   isPoolEndAtom,
   isPoolRatingAtom,
+  isReverseSidesAtom,
+  isSaveParticipantsForPoolsAtom,
   isSoundsAtom,
   languageAtom,
   pairsDefault,
@@ -231,13 +232,16 @@ function PoolDetailModal({
 // Основной компонент
 export default function SettingsScreen() {
   const { t } = useTranslation();
-  const bellPlayerRef = useRef<AudioPlayer | null>(null);
   const { playSound, deleteCustomSounds, stopSound, soundUpdate } =
     useBellSound();
 
   /* ---------- атомы ---------- */
   const [user] = useAtom(userAtom);
   const [isGroupBattle, setIsGroupBattle] = useAtom(isGroupBattleAtom);
+  const [isReverseSides, setIsReverseSides] = useAtom(isReverseSidesAtom);
+  const [isSaveParticipantsForPools, setIsSaveParticipantsForPools] = useAtom(
+    isSaveParticipantsForPoolsAtom,
+  );
   const [isSounds, setIsSounds] = useAtom(isSoundsAtom);
   const [, setBlockchain] = useAtom(blockchainAtom);
   const [poolCountDelete, setPoolCountDelete] = useAtom(poolCountDeleteAtom);
@@ -450,7 +454,7 @@ export default function SettingsScreen() {
   /* ---------- загрузка настроек ---------- */
   const loadSettings = async () => {
     try {
-      const [t, z, p, s, r, c, lang, privateKey] = await Promise.all([
+      const [t, z, p, s, r, c, lang, privateKey, spp] = await Promise.all([
         AsyncStorage.getItem("fightTime"),
         AsyncStorage.getItem("hitZones"),
         AsyncStorage.getItem("participants"),
@@ -459,6 +463,7 @@ export default function SettingsScreen() {
         AsyncStorage.getItem("poolCountDelete"),
         AsyncStorage.getItem("language"),
         AsyncStorage.getItem("privateKey"),
+        AsyncStorage.getItem("isSaveParticipantsForPools"),
       ]);
 
       if (t) setFightTime(JSON.parse(t));
@@ -478,6 +483,7 @@ export default function SettingsScreen() {
           privateKey,
         });
       }
+      if (spp) setIsSaveParticipantsForPools(JSON.parse(spp));
     } catch {
       Toast.show({ type: "error", text1: t("settingsLoadError") });
     }
@@ -490,6 +496,10 @@ export default function SettingsScreen() {
         AsyncStorage.setItem("fightTime", JSON.stringify(fightTime)),
         AsyncStorage.setItem("hitZones", JSON.stringify(hitZones)),
         AsyncStorage.setItem("participants", JSON.stringify(participants)),
+        AsyncStorage.setItem(
+          "isSaveParticipantsForPools",
+          JSON.stringify(isSaveParticipantsForPools),
+        ),
         AsyncStorage.setItem("isPoolRating", JSON.stringify(isPoolRating)),
         AsyncStorage.setItem(
           "poolCountDelete",
@@ -576,7 +586,7 @@ export default function SettingsScreen() {
           }
           if (onlyFirst) {
             const buf = [...state];
-            buf[pool] = firstList;
+            buf[poolIndex] = firstList;
             return buf;
           } else {
             return allLists;
@@ -584,7 +594,7 @@ export default function SettingsScreen() {
         };
       setFighterPairs((state) => {
         const buf = [...state];
-        buf[pool] = stateHandlerWrap(false)(state)[0];
+        buf[poolIndex] = stateHandlerWrap(false)(state)[0];
         return buf;
       });
       setPools((state) => stateHandlerWrap(true)(state));
@@ -592,14 +602,14 @@ export default function SettingsScreen() {
         const buf: [ParticipantType, ParticipantType][][][] = JSON.parse(
           JSON.stringify(state),
         );
-        buf[pool] = [];
-        buf[pool] = stateHandlerWrap(false)(buf[pool]);
+        buf[poolIndex] = [];
+        buf[poolIndex] = stateHandlerWrap(false)(buf[poolIndex]);
         setIsPoolEnd((isEnds) => {
           const bufEnds = [...isEnds];
-          if (isPoolEndByDuels(buf, pool)) {
-            bufEnds[pool] = true;
+          if (isPoolEndByDuels(buf, poolIndex)) {
+            bufEnds[poolIndex] = true;
           } else {
-            bufEnds[pool] = false;
+            bufEnds[poolIndex] = false;
           }
           return bufEnds;
         });
@@ -608,11 +618,14 @@ export default function SettingsScreen() {
       setParticipants((state) => {
         const buf = [...state];
         const virtualArr: [ParticipantType, ParticipantType][][] = new Array(
-          pool + 1,
+          poolIndex + 1,
         );
-        virtualArr[pool] = [...buf] as [ParticipantType, ParticipantType][];
-        buf[pool] = stateHandlerWrap(true)(virtualArr)
-          [pool].flat()
+        virtualArr[poolIndex] = [...buf] as [
+          ParticipantType,
+          ParticipantType,
+        ][];
+        buf[poolIndex] = stateHandlerWrap(true)(virtualArr)
+          [poolIndex].flat()
           .filter((item) => item.name !== "—") as [
           ParticipantType,
           ParticipantType,
@@ -809,6 +822,8 @@ export default function SettingsScreen() {
   const resetAll = async () => {
     setFightTime(fightTimeDefault);
     setHitZones(hitZonesDefault);
+    setIsGroupBattle(false);
+    setIsSaveParticipantsForPools(false);
     setIsPoolRating(true);
     setPoolCountDelete(1);
     await deleteCustomSounds("all", false);
@@ -1061,9 +1076,16 @@ export default function SettingsScreen() {
               <TouchableOpacity
                 onPress={() => {
                   if (currentPoolIndex + 1 === fighterPairs.length) {
+                    if (isSaveParticipantsForPools) {
+                      setParticipants([
+                        ...participants,
+                        [...participants[currentPoolIndex]],
+                      ]);
+                    } else {
+                      setParticipants([...participants, []]);
+                    }
                     setFighterPairs([...fighterPairs, ...pairsDefault]);
                     setPools([...pools, ...pairsDefault]);
-                    setParticipants([...participants, []]);
                     setCurrentPairIndex([...currentPairIndex, 0]);
                     setDuels([...duels, []]);
                     setIsPoolEnd([...isPoolEnd, false]);
@@ -1091,6 +1113,19 @@ export default function SettingsScreen() {
               setIsGroupBattle(val);
               setTournamentSystem(TournamentSystem.ROBIN);
             }}
+          />
+
+          <Switch
+            title={t("saveParticipantsForPools")}
+            value={isSaveParticipantsForPools}
+            setValue={setIsSaveParticipantsForPools}
+          />
+
+          <Switch
+            title={t("reverseSides")}
+            value={isReverseSides}
+            setValue={setIsReverseSides}
+            titleStyle={{ maxWidth: 200 }}
           />
 
           <Button

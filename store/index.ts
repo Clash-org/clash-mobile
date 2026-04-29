@@ -104,6 +104,10 @@ export const currentPoolIdAtom = atom<number>();
 
 export const isGroupBattleAtom = atom(false);
 
+export const isReverseSidesAtom = atom(false);
+
+export const isSaveParticipantsForPoolsAtom = atom(false);
+
 export const blockchainAtom = atom({
   wallet: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
   privateKey:

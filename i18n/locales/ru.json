@@ -298,5 +298,7 @@
   "clear": "Очистить",
   "error": "Ошибка",
   "serverNotFound": "Сервер не найден",
-  "noDataFound": "Данные не найдены"
+  "noDataFound": "Данные не найдены",
+  "reverseSides": "Поменять стороны «красный» и «синий»",
+  "saveParticipantsForPools": "Сохранить участников для последующих пулов"
 }

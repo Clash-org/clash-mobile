@@ -298,5 +298,7 @@
   "clear": "Clear",
   "error": "Error",
   "serverNotFound": "Server not found",
-  "noDataFound": "No data found"
+  "noDataFound": "No data found",
+  "reverseSides": "Swap sides «red» and «blue»",
+  "saveParticipantsForPools": "Save participants for subsequent pools"
 }

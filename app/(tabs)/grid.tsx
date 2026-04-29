@@ -297,8 +297,8 @@ export default function TournamentGridScreen() {
       endTournament();
     }
 
-    setDoubleHits(0);
     if (!isGroupBattle) {
+      setDoubleHits(0);
       setProtests1(0);
       setProtests2(0);
       setWarnings1(0);

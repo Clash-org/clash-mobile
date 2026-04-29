@@ -5,8 +5,10 @@ export const generatePairs = (
   participants: ParticipantType[],
   tournamentSystem: TournamentSystem,
   poolIndex: number,
-  setFighterPairs: React.Dispatch<React.SetStateAction<[ParticipantType, ParticipantType][][]>>,
-  setCurrentPairIndex: React.Dispatch<React.SetStateAction<number[]>>
+  setFighterPairs: React.Dispatch<
+    React.SetStateAction<[ParticipantType, ParticipantType][][]>
+  >,
+  setCurrentPairIndex: React.Dispatch<React.SetStateAction<number[]>>,
 ): [ParticipantType, ParticipantType][][] => {
   let pairs: [ParticipantType, ParticipantType][][] = [];
 
@@ -30,10 +32,12 @@ export const generatePairs = (
     };
 
     filter(shuffled);
-  } else if (tournamentSystem === TournamentSystem.HYBRID || tournamentSystem === TournamentSystem.ROBIN) {
-
-  /* ---------- КРУГОВАЯ ---------- */
-  let players = [[...participants]];
+  } else if (
+    tournamentSystem === TournamentSystem.HYBRID ||
+    tournamentSystem === TournamentSystem.ROBIN
+  ) {
+    /* ---------- КРУГОВАЯ ---------- */
+    let players = [[...participants]];
 
     players.forEach((group) => {
       const used = new Set<string>();
@@ -89,93 +93,94 @@ export const generatePairs = (
       if (!pairs[poolIndex]) pairs[poolIndex] = [];
       pairs[poolIndex].push(...tempPairs);
     });
-
   } else if (tournamentSystem === TournamentSystem.SWISS) {
     pairs = generateSwissPairs(participants, poolIndex);
   }
 
-/**
- * Генерация пар для швейцарской системы с учётом Buchholz
- */
-function generateSwissPairs(
-  participants: ParticipantType[],
-  poolIndex: number
-): [ParticipantType, ParticipantType][][] {
-  const pairs: [ParticipantType, ParticipantType][][] = [];
+  /**
+   * Генерация пар для швейцарской системы с учётом Buchholz
+   */
+  function generateSwissPairs(
+    participantsArr: ParticipantType[],
+    poolIndex: number,
+  ): [ParticipantType, ParticipantType][][] {
+    const pairs: [ParticipantType, ParticipantType][][] = [];
 
-  // Фильтруем только активных участников (исключаем —)
-  const activeParticipants = participants.filter(p => p.name !== "—");
+    // Фильтруем только активных участников (исключаем —)
+    const activeParticipants = participantsArr.filter((p) => p.name !== "—");
 
-  if (activeParticipants.length === 0) return pairs;
+    if (activeParticipants.length === 0) return pairs;
 
-  // 1. Сортируем участников по системе "победы -> Buchholz -> тех.очки"
-  const sorted = sortParticipantsBySwissCriteria(activeParticipants);
+    // 1. Сортируем участников по системе "победы -> Buchholz -> тех.очки"
+    const sorted = sortParticipantsBySwissCriteria(activeParticipants);
 
-  // 2. Группируем по ПОБЕДАМ (основной критерий швейцарской системы)
-  const winGroups = groupByWins(sorted);
+    // 2. Группируем по ПОБЕДАМ (основной критерий швейцарской системы)
+    const winGroups = groupByWins(sorted);
 
-  // 3. Генерируем пары с учётом всех правил
-  const tempPairs = generatePairsFromGroups(winGroups);
+    // 3. Генерируем пары с учётом всех правил
+    const tempPairs = generatePairsFromGroups(winGroups);
 
-  // 4. Сортируем пары (баи в конец)
-  pairs[poolIndex] = sortPairsWithByes(tempPairs);
+    // 4. Сортируем пары (баи в конец)
+    pairs[poolIndex] = sortPairsWithByes(tempPairs);
 
-  return pairs;
-}
-
-/**
- * Сортировка участников по критериям швейцарской системы
- */
-function sortParticipantsBySwissCriteria(
-  participants: ParticipantType[]
-): ParticipantType[] {
-  return [...participants].sort((a, b) => {
-    // 1. Главный критерий - ПОБЕДЫ (по убыванию)
-    if (b.wins !== a.wins) return b.wins - a.wins;
-
-    // 2. При равенстве побед - Buchholz (кто играл с более сильными)
-    if (b.buchholz !== a.buchholz) return b.buchholz - a.buchholz;
-
-    // 3. Затем - меньше поражений
-    if (a.losses !== b.losses) return a.losses - b.losses;
-
-    // 4. Затем - больше технических очков
-    if (b.scores !== a.scores) return b.scores - a.scores;
-
-    // 5. Если всё равно - случайно
-    return Math.random() - 0.5;
-  });
-}
-
-/**
- * Группировка по победам
- */
-function groupByWins(participants: ParticipantType[]): ParticipantType[][] {
-  const groups: ParticipantType[][] = [];
-  const winsMap = new Map<number, ParticipantType[]>();
-
-  participants.forEach(p => {
-    if (!winsMap.has(p.wins)) {
-      winsMap.set(p.wins, []);
-    }
-    winsMap.get(p.wins)!.push(p);
-  });
-
-  // Сортируем группы по убыванию побед
-  const sortedWins = Array.from(winsMap.keys()).sort((a, b) => b - a);
-
-  for (const wins of sortedWins) {
-    groups.push(winsMap.get(wins)!);
+    return pairs;
   }
 
-  return groups;
-}
+  /**
+   * Сортировка участников по критериям швейцарской системы
+   */
+  function sortParticipantsBySwissCriteria(
+    participantsArr: ParticipantType[],
+  ): ParticipantType[] {
+    return [...participantsArr].sort((a, b) => {
+      // 1. Главный критерий - ПОБЕДЫ (по убыванию)
+      if (b.wins !== a.wins) return b.wins - a.wins;
+
+      // 2. При равенстве побед - Buchholz (кто играл с более сильными)
+      if (b.buchholz !== a.buchholz) return b.buchholz - a.buchholz;
+
+      // 3. Затем - меньше поражений
+      if (a.losses !== b.losses) return a.losses - b.losses;
+
+      // 4. Затем - больше технических очков
+      if (b.scores !== a.scores) return b.scores - a.scores;
+
+      // 5. Если всё равно - случайно
+      return Math.random() - 0.5;
+    });
+  }
+
+  /**
+   * Группировка по победам
+   */
+  function groupByWins(
+    participantsArr: ParticipantType[],
+  ): ParticipantType[][] {
+    const groups: ParticipantType[][] = [];
+    const winsMap = new Map<number, ParticipantType[]>();
+
+    participantsArr.forEach((p) => {
+      if (!winsMap.has(p.wins)) {
+        winsMap.set(p.wins, []);
+      }
+      winsMap.get(p.wins)!.push(p);
+    });
+
+    // Сортируем группы по убыванию побед
+    const sortedWins = Array.from(winsMap.keys()).sort((a, b) => b - a);
+
+    for (const wins of sortedWins) {
+      groups.push(winsMap.get(wins)!);
+    }
+
+    return groups;
+  }
 
   /**
    * Генерация пар из групп с учётом Buchholz
    */
   function generatePairsFromGroups(
-    groups: ParticipantType[][]
+    groups: ParticipantType[][],
   ): [ParticipantType, ParticipantType][] {
     const localPairs: [ParticipantType, ParticipantType][] = [];
     const used = new Set<string>();
@@ -202,12 +207,7 @@ function groupByWins(participants: ParticipantType[]): ParticipantType[][] {
         if (used.has(player.id)) continue;
 
         // Ищем соперника в текущей группе
-        let opponent = findBestOpponent(
-          player,
-          sortedGroup,
-          i,
-          used
-        );
+        let opponent = findBestOpponent(player, sortedGroup, i, used);
 
         if (opponent) {
           // Определяем порядок (кто первый) на основе Buchholz
@@ -224,7 +224,7 @@ function groupByWins(participants: ParticipantType[]): ParticipantType[][] {
 
       // Если остались неспаренные в текущей группе, пробуем найти им пары в соседних группах
       if (unpairedFromGroup.length > 0) {
-        const remainingGroups = groupsQueue.filter(g => g.length > 0);
+        const remainingGroups = groupsQueue.filter((g) => g.length > 0);
 
         for (const player of unpairedFromGroup) {
           if (used.has(player.id)) continue;
@@ -233,7 +233,7 @@ function groupByWins(participants: ParticipantType[]): ParticipantType[][] {
           const opponent = findOpponentInNearbyGroups(
             player,
             remainingGroups,
-            used
+            used,
           );
 
           if (opponent) {
@@ -248,8 +248,8 @@ function groupByWins(participants: ParticipantType[]): ParticipantType[][] {
               player,
               {
                 ...fighterDefault,
-                id: player.id
-              }
+                id: player.id,
+              },
             ]);
             used.add(player.id);
           }
@@ -267,7 +267,7 @@ function groupByWins(participants: ParticipantType[]): ParticipantType[][] {
     player: ParticipantType,
     group: ParticipantType[],
     startIndex: number,
-    used: Set<string>
+    used: Set<string>,
   ): ParticipantType | null {
     const candidates: ParticipantType[] = [];
 
@@ -301,7 +301,7 @@ function groupByWins(participants: ParticipantType[]): ParticipantType[][] {
   function findOpponentInNearbyGroups(
     player: ParticipantType,
     groups: ParticipantType[][],
-    used: Set<string>
+    used: Set<string>,
   ): ParticipantType | null {
     const playerWins = player.wins;
     const candidates: ParticipantType[] = [];
@@ -341,7 +341,7 @@ function groupByWins(participants: ParticipantType[]): ParticipantType[][] {
    */
   function determinePairOrder(
     a: ParticipantType,
-    b: ParticipantType
+    b: ParticipantType,
   ): [ParticipantType, ParticipantType] {
     // Тот, у кого выше Buchholz, идёт первым (опционально)
     return (a.buchholz || 0) >= (b.buchholz || 0) ? [a, b] : [b, a];
@@ -352,7 +352,7 @@ function groupByWins(participants: ParticipantType[]): ParticipantType[][] {
    */
   function haveTheyPlayed(
     player1: ParticipantType,
-    player2: ParticipantType
+    player2: ParticipantType,
   ): boolean {
     return (
       player1.opponents?.includes(player2.id) ||
@@ -361,9 +361,11 @@ function groupByWins(participants: ParticipantType[]): ParticipantType[][] {
   }
 
   /**
- * Сортировка пар (баи в конец)
- */
-  function sortPairsWithByes(pairs: [ParticipantType, ParticipantType][]): [ParticipantType, ParticipantType][] {
+   * Сортировка пар (баи в конец)
+   */
+  function sortPairsWithByes(
+    pairs: [ParticipantType, ParticipantType][],
+  ): [ParticipantType, ParticipantType][] {
     return [...pairs].sort((a, b) => {
       const aHasBye = a[1]?.name === "—";
       const bHasBye = b[1]?.name === "—";

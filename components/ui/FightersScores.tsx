@@ -81,9 +81,7 @@ export default function FightersScores({
               </Text>
             </TouchableOpacity>
 
-            <View
-              style={[styles.cell, styles.scoreCell, styles.scoreCellContainer]}
-            >
+            <View style={[styles.cell, styles.scoreCell]}>
               <Text
                 style={[
                   styles.scoreText,
@@ -94,9 +92,7 @@ export default function FightersScores({
               </Text>
             </View>
 
-            <View
-              style={[styles.cell, styles.scoreCell, styles.scoreCellContainer]}
-            >
+            <View style={[styles.cell, styles.scoreCell]}>
               <Text
                 style={[
                   styles.scoreText,
@@ -160,6 +156,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     justifyContent: "center",
     alignItems: "center",
+    minWidth: 70,
   },
   firstCell: {
     flex: 2,
@@ -171,10 +168,7 @@ const styles = StyleSheet.create({
   },
   scoreCell: {
     flex: 1,
-    minWidth: 70,
     width: 70, // Фиксированная ширина для ячеек с очками
-  },
-  scoreCellContainer: {
     justifyContent: "center",
     alignItems: "center",
   },

@@ -1,13 +1,13 @@
 import { Colors, Fonts } from "@/constants";
 import React from "react";
 import {
-    Platform,
-    Switch as RNSwitch,
-    StyleSheet,
-    Text,
-    TextStyle,
-    View,
-    ViewStyle,
+  Platform,
+  Switch as RNSwitch,
+  StyleSheet,
+  Text,
+  TextStyle,
+  View,
+  ViewStyle,
 } from "react-native";
 
 interface SwitchProps {
@@ -60,6 +60,7 @@ export default function Switch({
 const styles = StyleSheet.create({
   switchRow: {
     flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
     gap: 12,
     width: "100%",

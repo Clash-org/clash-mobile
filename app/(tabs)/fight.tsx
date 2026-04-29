@@ -25,6 +25,7 @@ import {
   hitZonesAtom,
   isGroupBattleAtom,
   isPoolEndAtom,
+  isReverseSidesAtom,
   isRunningAtom,
   playoffAtom,
   playoffIndexAtom,
@@ -55,6 +56,7 @@ export default function FightScreen() {
   const { t } = useTranslation();
   const { playSound, stopSound } = useBellSound();
   const [isGroupBattle] = useAtom(isGroupBattleAtom);
+  const [isReverseSides] = useAtom(isReverseSidesAtom);
   const [currentPairIndex, setCurrentPairIndex] = useAtom(currentPairIndexAtom);
   const [currentPoolIndex] = useAtom(currentPoolIndexAtom);
   const [isRunning, setIsRunning] = useAtom(isRunningAtom);
@@ -303,8 +305,8 @@ export default function FightScreen() {
       setProtests2(0);
       setWarnings1(0);
       setWarnings2(0);
+      setDoubleHits(0);
     }
-    setDoubleHits(0);
     setTimeLeft(fightTime);
     setIsRunning(false);
     setHistory([]);
@@ -384,7 +386,7 @@ export default function FightScreen() {
   ];
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isReverseSides && styles.reverse]}>
       {/* Левая и правая половины */}
       {fighterData.map((data, i) => (
         <View
@@ -590,6 +592,9 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingTop: 55,
     alignItems: "center",
+  },
+  reverse: {
+    flexDirection: "row-reverse",
   },
   red: {
     backgroundColor: "#8B0000",

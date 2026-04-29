@@ -298,5 +298,7 @@
   "clear": "清楚",
   "error": "错误",
   "serverNotFound": "未找到服务器",
-  "noDataFound": "未找到数据"
+  "noDataFound": "未找到数据",
+  "reverseSides": "交换边«红色»和«蓝色»",
+  "saveParticipantsForPools": "为后续平台保存参与者"
 }
