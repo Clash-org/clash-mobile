@@ -13,6 +13,7 @@ import React, {
 } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  FlatList,
   ScrollView as RNScrollView,
   StyleSheet,
   Text,
@@ -46,6 +47,8 @@ type SelectPairProps = {
 type DraggableParticipant = {
   participant: ParticipantType;
   id: string;
+  pairIndex: number;
+  position: "left" | "right";
 };
 
 export default function SelectPair({
@@ -101,10 +104,14 @@ export default function SelectPair({
       result.push({
         participant: pair[0],
         id: `${pairIdx}-0-${pair[0].id || pairIdx}`,
+        pairIndex: pairIdx,
+        position: "left",
       });
       result.push({
         participant: pair[1],
         id: `${pairIdx}-1-${pair[1].id || pairIdx}`,
+        pairIndex: pairIdx,
+        position: "right",
       });
     });
     return result;
@@ -179,6 +186,24 @@ export default function SelectPair({
     return null;
   }
 
+  // Создаем данные для FlatList с иконками удаления
+  const deleteData = useMemo(() => {
+    const result: { pairIndex: number }[] = [];
+    if (!fighterPairs[poolIndex]) return result;
+
+    fighterPairs[poolIndex].forEach((_, pairIdx) => {
+      if (
+        deleteEmptyPairs &&
+        (fighterPairs[poolIndex][pairIdx][0].name === "—" ||
+          fighterPairs[poolIndex][pairIdx][1].name === "—")
+      ) {
+        return;
+      }
+      result.push({ pairIndex: pairIdx });
+    });
+    return result;
+  }, [fighterPairs, poolIndex, deleteEmptyPairs]);
+
   const renderItem = useCallback(
     ({
       item,
@@ -188,94 +213,105 @@ export default function SelectPair({
     }: RenderItemParams<DraggableParticipant>) => {
       const index = getIndex() || 0;
       const isCurrentActive = currentPairIndex === Math.floor(index / 2);
-      const isLeft = index % 2 === 0;
+      const isLeft = item.position === "left";
       const pairNumber = Math.floor(index / 2);
 
       return (
         <ScaleDecorator>
-          <View style={styles.itemWrapper}>
-            <TouchableOpacity
-              onLongPress={drag}
-              delayLongPress={150}
-              activeOpacity={0.7}
-              onPress={() => {
-                if (!dragging) {
-                  selectPair(Math.floor(index / 2));
-                }
-              }}
-              style={[
-                styles.dragItem,
-                isCurrentActive && styles.dragItemActive,
-                isDragging && styles.dragItemDragging,
-                isLeft ? styles.leftParticipant : styles.rightParticipant,
-                !isLeft ? { marginRight: 44 } : {},
-              ]}
-            >
-              <View style={styles.dragItemContent}>
-                <View style={styles.participantInfo}>
-                  <Text style={styles.participantName} numberOfLines={1}>
-                    {getName(item.participant.name)}
-                  </Text>
-                  <View
-                    style={[
-                      styles.positionIndicator,
-                      isLeft ? styles.redIndicator : styles.blueIndicator,
-                    ]}
-                  />
-                </View>
-                <Text style={styles.pairIndexText}>
-                  {t("pair")} {pairNumber + 1}
+          <TouchableOpacity
+            onLongPress={drag}
+            delayLongPress={150}
+            activeOpacity={0.7}
+            onPress={() => {
+              if (!dragging) {
+                selectPair(Math.floor(index / 2));
+              }
+            }}
+            style={[
+              styles.dragItem,
+              isCurrentActive && styles.dragItemActive,
+              isDragging && styles.dragItemDragging,
+              isLeft ? styles.leftParticipant : styles.rightParticipant,
+            ]}
+          >
+            <View style={styles.dragItemContent}>
+              <View style={styles.participantInfo}>
+                <Text style={styles.participantName} numberOfLines={1}>
+                  {getName(item.participant.name)}
                 </Text>
+                <View
+                  style={[
+                    styles.positionIndicator,
+                    isLeft ? styles.redIndicator : styles.blueIndicator,
+                  ]}
+                />
               </View>
-            </TouchableOpacity>
-
-            {isLeft && onDeletePair && onPairsReordered && setPools && (
-              <>
-                <TouchableOpacity
-                  style={styles.deleteButton}
-                  onPress={() => {
-                    setIsDelete((state) => {
-                      const buf = [...state];
-                      buf[pairNumber] = true;
-                      return buf;
-                    });
-                  }}
-                >
-                  <Trash2 size={25} color={Colors.placeholder} />
-                </TouchableOpacity>
-                <ModalWindow
-                  title={t("realyDelete")}
-                  isOpen={isDelete[pairNumber] || false}
-                  onClose={() => {
-                    setIsDelete((state) => {
-                      const buf = [...state];
-                      buf[pairNumber] = false;
-                      return buf;
-                    });
-                  }}
-                >
-                  <Button
-                    onPress={() => {
-                      const pair = fighterPairs[poolIndex]?.[pairNumber];
-                      if (pair) {
-                        handleDeletePair(pair, pairNumber);
-                      }
-                    }}
-                  >
-                    <Trash2 color={Colors.fg} size={20} />
-                  </Button>
-                </ModalWindow>
-              </>
-            )}
-          </View>
+              <Text style={styles.pairIndexText}>
+                {t("pair")} {pairNumber + 1}
+              </Text>
+            </View>
+          </TouchableOpacity>
         </ScaleDecorator>
+      );
+    },
+    [currentPairIndex, dragging, selectPair, t],
+  );
+
+  const renderDeleteItem = useCallback(
+    ({ item }: { item: { pairIndex: number } }) => {
+      const pairNumber = item.pairIndex;
+
+      return (
+        <View
+          style={{
+            height: 100,
+            justifyContent: "center",
+            alignSelf: "flex-end",
+          }}
+        >
+          {onDeletePair && onPairsReordered && setPools && (
+            <>
+              <TouchableOpacity
+                style={styles.deleteButton}
+                onPress={() => {
+                  setIsDelete((state) => {
+                    const buf = [...state];
+                    buf[pairNumber] = true;
+                    return buf;
+                  });
+                }}
+              >
+                <Trash2 size={25} color={Colors.placeholder} />
+              </TouchableOpacity>
+              <ModalWindow
+                title={t("realyDelete")}
+                isOpen={isDelete[pairNumber] || false}
+                onClose={() => {
+                  setIsDelete((state) => {
+                    const buf = [...state];
+                    buf[pairNumber] = false;
+                    return buf;
+                  });
+                }}
+              >
+                <Button
+                  onPress={() => {
+                    const pair = fighterPairs[poolIndex]?.[pairNumber];
+                    if (pair) {
+                      handleDeletePair(pair, pairNumber);
+                    }
+                  }}
+                >
+                  <Trash2 color={Colors.fg} size={20} />
+                </Button>
+              </ModalWindow>
+            </>
+          )}
+        </View>
       );
     },
     [
       currentPairIndex,
-      dragging,
-      selectPair,
-      t,
       isDelete,
       fighterPairs,
       poolIndex,
@@ -283,12 +319,13 @@ export default function SelectPair({
       onPairsReordered,
       setPools,
       handleDeletePair,
+      t,
     ],
   );
 
   return (
     <Section title={`${t("pairs")}: ${t("pool")} ${poolIndex + 1}`}>
-      <GestureHandlerRootView style={{ flex: 1 }}>
+      <GestureHandlerRootView>
         {isGroupBattle && (
           <View style={styles.teams}>
             <Text style={[styles.teamText, styles.redTeam]}>
@@ -300,25 +337,46 @@ export default function SelectPair({
           </View>
         )}
 
-        <View style={{ flex: 1 }}>
-          <DraggableFlatList
-            ref={listRef}
-            data={draggableData}
-            renderItem={renderItem}
-            keyExtractor={(item) => item.id}
-            onDragBegin={handleDragBegin}
-            onDragEnd={handleDragEnd}
-            activationDistance={5}
-            containerStyle={styles.dragListContainer}
-            autoscrollSpeed={100}
-            animationConfig={{
-              duration: 150,
-            }}
-            scrollEnabled={false}
-            dragHitSlop={{ left: 50, right: 50, top: 50, bottom: 50 }}
-            simultaneousHandlers={[]}
-            showsVerticalScrollIndicator={false}
-          />
+        <View style={styles.container}>
+          {/* Левая колонка - DraggableFlatList с именами */}
+          <View style={styles.leftColumn}>
+            <DraggableFlatList
+              ref={listRef}
+              data={draggableData}
+              renderItem={renderItem}
+              keyExtractor={(item) => item.id}
+              onDragBegin={handleDragBegin}
+              onDragEnd={handleDragEnd}
+              activationDistance={5}
+              autoscrollSpeed={100}
+              animationConfig={{
+                duration: 150,
+              }}
+              scrollEnabled={false}
+              dragHitSlop={{ left: 50, right: 50, top: 50, bottom: 50 }}
+              contentContainerStyle={{
+                flex: 1,
+                gap: 10,
+              }}
+              simultaneousHandlers={[]}
+              showsVerticalScrollIndicator={false}
+            />
+          </View>
+
+          {/* Правая колонка - FlatList с иконками удаления */}
+          <View style={styles.rightColumn}>
+            <FlatList
+              data={deleteData}
+              renderItem={renderDeleteItem}
+              keyExtractor={(item) => `delete-${item.pairIndex}`}
+              scrollEnabled={false}
+              contentContainerStyle={{
+                flex: 1,
+                justifyContent: "space-between",
+              }}
+              showsVerticalScrollIndicator={false}
+            />
+          </View>
         </View>
       </GestureHandlerRootView>
     </Section>
@@ -351,17 +409,17 @@ const styles = StyleSheet.create({
   blueTeam: {
     color: "#3B82F6",
   },
-  dragListContainer: {
-    flex: 1,
-    minHeight: 300,
-  },
-  itemWrapper: {
+  container: {
     flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 8,
+  },
+  leftColumn: {
+    flex: 1,
+  },
+  rightColumn: {
+    width: 50,
+    justifyContent: "center",
   },
   dragItem: {
-    flex: 1,
     backgroundColor: Colors.accentTransparent,
     borderRadius: 12,
     borderWidth: 1,
@@ -385,8 +443,8 @@ const styles = StyleSheet.create({
     borderLeftColor: "#E33515",
   },
   rightParticipant: {
-    borderRightWidth: 3,
-    borderRightColor: "#3B82F6",
+    borderLeftWidth: 3,
+    borderLeftColor: "#3B82F6",
   },
   dragItemContent: {
     flexDirection: "row",
@@ -425,8 +483,5 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     padding: 8,
-    marginLeft: 4,
-    position: "relative",
-    top: 30,
   },
 });
