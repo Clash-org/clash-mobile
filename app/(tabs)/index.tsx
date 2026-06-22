@@ -297,6 +297,7 @@ export default function SettingsScreen() {
     null,
   );
   const [isBellPlaying, setIsBellPlaying] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   const systems = [
     { label: t("hybridSystem"), value: TournamentSystem.HYBRID.toString() },
@@ -898,6 +899,7 @@ export default function SettingsScreen() {
       <KeyboardAwareScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
+        scrollEnabled={!isDragging}
       >
         {/* Кнопка смены языка */}
         <View style={styles.langRow}>
@@ -1166,6 +1168,7 @@ export default function SettingsScreen() {
             removeParticipant(id1);
             removeParticipant(id2);
           }}
+          onDragStateChange={setIsDragging}
           manualMode
         />
 
