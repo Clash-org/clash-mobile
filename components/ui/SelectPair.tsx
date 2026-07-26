@@ -2,9 +2,15 @@ import { Colors, Fonts } from "@/constants";
 import {
   currentTeamsIndexesAtom,
   isGroupBattleAtom,
+  tournamentSystemAtom,
   triathlonWeaponsAtom,
 } from "@/store";
-import { ParticipantType, TeamPlayOffType, TeamType } from "@/typings";
+import {
+  ParticipantType,
+  TeamPlayOffType,
+  TeamType,
+  TournamentSystem,
+} from "@/typings";
 import { getName, teamSelect } from "@/utils/helpers";
 import { useAtom } from "jotai";
 import { Trash2 } from "lucide-react-native";
@@ -75,8 +81,9 @@ export default function SelectPair({
 }: SelectPairProps) {
   const { t } = useTranslation();
   const [isGroupBattle] = useAtom(isGroupBattleAtom);
-  const isTriathlon = teams !== undefined;
-  const isSwiss = fighterPairs[poolIndex]?.[0]?.[0]?.arena !== undefined;
+  const [tournamentSystem] = useAtom(tournamentSystemAtom);
+  const isTriathlon = tournamentSystem === TournamentSystem.TRIATHLON;
+  const isSwiss = tournamentSystem === TournamentSystem.SWISS;
   const [triathlonWeapons] = useAtom(triathlonWeaponsAtom);
   const [currentTeamsIndexes, setCurrentTeamsIndexes] = useAtom(
     currentTeamsIndexesAtom,
