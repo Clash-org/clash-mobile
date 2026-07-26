@@ -1,8 +1,7 @@
-// components/Playoff/index.tsx
 import { useRouter } from "expo-router";
 import { useAtom } from "jotai";
 import { HardDriveUpload, Save } from "lucide-react-native";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ScrollView,
@@ -23,34 +22,61 @@ import {
   playoffAtom,
   playoffIndexAtom,
   playoffMatchIndexAtom,
+  playoffTriathlonAtom,
   protests1Atom,
   protests2Atom,
   score1Atom,
   score2Atom,
+  teamCountAtom,
+  virtualPairIndexAtom,
+  virtualPoolIndexAtom,
   warnings1Atom,
   warnings2Atom,
 } from "@/store";
-import { ParticipantPlayoffType, TournamentMatchType } from "@/typings";
+import {
+  ParticipantPlayoffType,
+  ParticipantType,
+  PodiumType,
+  TeamPlayOffType,
+  TournamentMatchType,
+} from "@/typings";
 import { processTournament } from "@/utils/api";
 import { exportExcel } from "@/utils/exportExcel";
-import { createMatches, getMatchesFromDuels } from "@/utils/helpers";
+import {
+  changeValueInStateArray,
+  createMatches,
+  getMatchesFromDuels,
+} from "@/utils/helpers";
+import { convertTriathlonToParticipantPairs } from "@/utils/matchesHandlers";
+import { SafeAreaView } from "react-native-safe-area-context";
 import Toast from "react-native-toast-message";
+import SelectPair from "./ui/SelectPair";
 
 interface PlayoffProps {
-  onTournamentComplete?: (winner: ParticipantPlayoffType) => void;
+  isTriathlon?: boolean;
 }
 
-export default function Playoff({ onTournamentComplete }: PlayoffProps) {
+export default function Playoff({ isTriathlon = false }: PlayoffProps) {
   const { t } = useTranslation();
   const router = useRouter();
   const [currentTournament] = useAtom(currentTournamentAtom);
   const [currentWeaponId] = useAtom(currentWeaponIdAtom);
   const [currentNominationId] = useAtom(currentNominationIdAtom);
-  const [playoff, setPlayoff] = useAtom(playoffAtom);
+  const [teamCount] = useAtom(teamCountAtom);
+
+  const [playoffIndividual, setPlayoffIndividual] = useAtom(playoffAtom);
+  const [playoffTriathlon, setPlayoffTriathlon] = useAtom(playoffTriathlonAtom);
+  const [virtualPoolIndex, setVirtualPoolIndex] = useAtom(virtualPoolIndexAtom);
+  const [virtualPairIndex, setVirtualPairIndex] = useAtom(virtualPairIndexAtom);
+
   const [winners, setWinners] = useState<{ [key: string]: number }>({});
-  const [champion, setChampion] = useState<ParticipantPlayoffType | null>(null);
-  const [, setPlayoffIndex] = useAtom(playoffIndexAtom);
-  const [, setPlayoffMatchIndex] = useAtom(playoffMatchIndexAtom);
+  const [champion, setChampion] = useState<
+    ParticipantPlayoffType | TeamPlayOffType | null
+  >(null);
+  const [playoffIndex, setPlayoffIndex] = useAtom(playoffIndexAtom);
+  const [playoffMatchIndex, setPlayoffMatchIndex] = useAtom(
+    playoffMatchIndexAtom,
+  );
   const [, setDoubleHits] = useAtom(doubleHitsAtom);
   const [, setProtests1] = useAtom(protests1Atom);
   const [, setProtests2] = useAtom(protests2Atom);
@@ -59,22 +85,62 @@ export default function Playoff({ onTournamentComplete }: PlayoffProps) {
   const [, setScore1] = useAtom(score1Atom);
   const [, setScore2] = useAtom(score2Atom);
   const [, setHistory] = useAtom(historyAtom);
-  const [podium, setPodium] = useState<{
-    first: ParticipantPlayoffType | null;
-    second: ParticipantPlayoffType | null;
-    third: ParticipantPlayoffType | null;
-    fourth: ParticipantPlayoffType | null;
-  }>({
+
+  const [podium, setPodium] = useState<PodiumType>({
     first: null,
     second: null,
     third: null,
     fourth: null,
   });
 
+  const playoff = useMemo(() => {
+    if (isTriathlon) {
+      return playoffTriathlon || [];
+    }
+    return playoffIndividual || [];
+  }, [isTriathlon, playoffTriathlon, playoffIndividual]);
+
+  const setPlayoff = useMemo(() => {
+    return isTriathlon ? setPlayoffTriathlon : setPlayoffIndividual;
+  }, [isTriathlon, setPlayoffTriathlon, setPlayoffIndividual]);
+
+  const triathlonFighterPairs = useMemo(() => {
+    if (!isTriathlon || !playoffTriathlon?.length) {
+      return [] as [ParticipantType, ParticipantType][][];
+    }
+
+    const currentRound = playoffTriathlon[playoffIndex];
+    if (!currentRound) {
+      return [] as [ParticipantType, ParticipantType][][];
+    }
+
+    return currentRound.map((teamsPairs) => {
+      const team1 = teamsPairs?.[0];
+      const team2 = teamsPairs?.[1];
+      const members1 = team1?.members ?? [];
+      const members2 = team2?.members ?? [];
+
+      return members1.map((m, idx) => [{ ...m }, { ...members2[idx] }]);
+    }) as [ParticipantType, ParticipantType][][];
+  }, [isTriathlon, playoffTriathlon, playoffIndex]);
+
+  const triathlonTeams = useMemo(() => {
+    if (!isTriathlon || !playoffTriathlon?.length) {
+      return [];
+    }
+
+    const currentRound = playoffTriathlon[playoffIndex];
+    if (!currentRound) {
+      return [];
+    }
+
+    return currentRound.map((m) => m.flat());
+  }, [isTriathlon, playoffTriathlon, playoffIndex]);
+
   const saveOnServer = async () => {
     if (currentTournament && currentNominationId && currentWeaponId) {
       const matches: TournamentMatchType[] = getMatchesFromDuels(
-        playoff,
+        playoff as any,
         undefined,
         "playoff",
       );
@@ -85,15 +151,20 @@ export default function Playoff({ onTournamentComplete }: PlayoffProps) {
         matches,
       );
 
+      const winnerIds =
+        isTriathlon && podium.first
+          ? [String((podium.first as TeamPlayOffType).id)]
+          : [
+              String(podium.first?.id),
+              String(podium.second?.id),
+              String(podium.third?.id),
+            ];
+
       const res = await processTournament(
         currentTournament.id,
         currentWeaponId,
         currentNominationId,
-        [
-          String(podium.first?.id),
-          String(podium.second?.id),
-          String(podium.third?.id),
-        ],
+        winnerIds,
         undefined,
         new Date(currentTournament.date),
       );
@@ -120,9 +191,18 @@ export default function Playoff({ onTournamentComplete }: PlayoffProps) {
   };
 
   const generateNextRound = () => {
+    const isTeams = (obj: any): obj is TeamPlayOffType =>
+      obj?.members !== undefined;
     const currentRoundIndex = playoff.length - 1;
     const currentRound = playoff[currentRoundIndex];
-    const nextRoundPairs: ParticipantPlayoffType[][] = [];
+    const nextRoundPairs: any[][] = [];
+    const additionalFields = {
+      wins: 0,
+      scores: 0,
+      warnings: 0,
+      protests: 0,
+      doubleHits: 0,
+    };
 
     const allWinnersDetermined = currentRound.every(
       (_, idx) => winners[`${currentRoundIndex}-${idx}`] !== undefined,
@@ -143,10 +223,31 @@ export default function Playoff({ onTournamentComplete }: PlayoffProps) {
 
           const winner1 = match1[winner1Index];
           const winner2 = match2[winner2Index];
+          let membersFieldFirst = {};
+          let membersFieldSecond = {};
+          if (isTeams(winner1) && isTeams(winner2)) {
+            membersFieldFirst = {
+              members: winner1.members.map((m) => ({
+                ...m,
+                ...additionalFields,
+                weapon: "",
+              })),
+            };
+            membersFieldSecond = {
+              members: winner2.members.map((m) => ({
+                ...m,
+                ...additionalFields,
+                weapon: "",
+              })),
+            };
+          } else {
+            membersFieldFirst = { ...additionalFields };
+            membersFieldSecond = { ...additionalFields };
+          }
 
           nextRoundPairs.push([
-            { ...winner1, scores: 0, wins: 0 },
-            { ...winner2, scores: 0, wins: 0 },
+            { ...winner1, scores: 0, ...membersFieldFirst },
+            { ...winner2, scores: 0, ...membersFieldSecond },
           ]);
         }
       }
@@ -155,29 +256,55 @@ export default function Playoff({ onTournamentComplete }: PlayoffProps) {
         playoff.length >= 2 && playoff[currentRoundIndex - 1]?.length === 2;
 
       if (!hadPreviousTwoPairs) {
-        const finalists: ParticipantPlayoffType[] = [];
-        const thirdPlaceContenders: ParticipantPlayoffType[] = [];
+        const finalists: any[] = [];
+        const thirdPlaceContenders: any[] = [];
 
         for (let i = 0; i < currentRound.length; i++) {
           const match = currentRound[i];
           const winnerIndex = winners[`${currentRoundIndex}-${i}`];
           const loserIndex = winnerIndex === 0 ? 1 : 0;
 
-          finalists.push({ ...match[winnerIndex], scores: 0, wins: 0 });
+          let membersFieldFirst = {};
+          let membersFieldSecond = {};
+          if (isTeams(match[winnerIndex]) && isTeams(match[loserIndex])) {
+            membersFieldFirst = {
+              members: match[winnerIndex].members.map((m) => ({
+                ...m,
+                ...additionalFields,
+                weapon: "",
+              })),
+            };
+            membersFieldSecond = {
+              members: match[loserIndex].members.map((m) => ({
+                ...m,
+                ...additionalFields,
+                weapon: "",
+              })),
+            };
+          } else {
+            membersFieldFirst = { ...additionalFields };
+            membersFieldSecond = { ...additionalFields };
+          }
+
+          finalists.push({
+            ...match[winnerIndex],
+            scores: 0,
+            ...membersFieldFirst,
+          });
           thirdPlaceContenders.push({
             ...match[loserIndex],
             scores: 0,
-            wins: 0,
+            ...membersFieldSecond,
           });
         }
 
         if (finalists.length === 2) {
-          nextRoundPairs.push([finalists[0], finalists[1]]);
+          nextRoundPairs.push([{ ...finalists[0] }, { ...finalists[1] }]);
         }
         if (thirdPlaceContenders.length === 2) {
           nextRoundPairs.push([
-            thirdPlaceContenders[0],
-            thirdPlaceContenders[1],
+            { ...thirdPlaceContenders[0] },
+            { ...thirdPlaceContenders[1] },
           ]);
         }
       } else {
@@ -186,6 +313,12 @@ export default function Playoff({ onTournamentComplete }: PlayoffProps) {
     }
 
     if (nextRoundPairs.length > 0) {
+      if (isTriathlon) {
+        setVirtualPoolIndex(0);
+        setVirtualPairIndex(new Array(nextRoundPairs.length).fill(0));
+      }
+      setPlayoffIndex((state) => state + 1);
+      setPlayoffMatchIndex(0);
       setPlayoff((prev) => [...prev, nextRoundPairs]);
     }
   };
@@ -226,10 +359,6 @@ export default function Playoff({ onTournamentComplete }: PlayoffProps) {
         third: thirdPlace,
         fourth: fourthPlace,
       });
-
-      if (onTournamentComplete) {
-        onTournamentComplete(champion);
-      }
     } else if (isSimpleFinal) {
       const finalMatch = lastRound[0];
       const winnerIndex = winners[`${lastRoundIndex}-0`];
@@ -243,12 +372,8 @@ export default function Playoff({ onTournamentComplete }: PlayoffProps) {
         third: null,
         fourth: null,
       });
-
-      if (onTournamentComplete) {
-        onTournamentComplete(champion);
-      }
     }
-  }, [winners, playoff, onTournamentComplete]);
+  }, [winners, playoff]);
 
   const canGenerateNextRound = () => {
     if (playoff.length === 0 || champion) return false;
@@ -301,194 +426,341 @@ export default function Playoff({ onTournamentComplete }: PlayoffProps) {
     setWarnings1(0);
     setWarnings2(0);
     setHistory([]);
+    if (isTriathlon) {
+      setVirtualPoolIndex(matchIndex);
+      setVirtualPairIndex((state) => {
+        const currentValue =
+          state && state[matchIndex] !== undefined ? state[matchIndex] : 0;
+
+        const newState = [...state];
+        while (newState.length <= matchIndex) {
+          newState.push(0);
+        }
+        newState[matchIndex] = currentValue;
+
+        return newState;
+      });
+    }
     router.push("/fight");
   };
 
+  const getDisplayName = (item: any): string => {
+    if (isTriathlon) {
+      return (
+        (item as TeamPlayOffType).name ||
+        `${t("team")} ${(item as TeamPlayOffType).id}`
+      );
+    }
+    return (item as ParticipantPlayoffType).name;
+  };
+
+  const getItemScores = (item: any): number => {
+    return item.scores || 0;
+  };
+
+  const participantClick = (roundIdx: number, matchIdx: number) => {
+    if (isTriathlon) {
+      setPlayoffIndex(roundIdx);
+      setPlayoffMatchIndex(matchIdx);
+      setVirtualPoolIndex(matchIdx);
+
+      setVirtualPairIndex((state) =>
+        changeValueInStateArray(
+          state,
+          state[matchIdx] ? state[matchIdx] : 0,
+          matchIdx,
+        ),
+      );
+    } else handleFighterClick(roundIdx, matchIdx, 0);
+  };
+
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Подиум победителей */}
-      {podium.first && (
-        <View style={styles.podium}>
-          <Text style={styles.podiumTitle}>🏆 {t("finalPlaces")} 🏆</Text>
-          <View style={styles.podiumContainer}>
-            <View style={[styles.podiumItem, styles.firstPlace]}>
-              <Text style={styles.podiumPlace}>🥇</Text>
-              <Text style={styles.podiumName}>{podium.first.name}</Text>
-            </View>
-
-            <View style={styles.podiumItem}>
-              <Text style={styles.podiumPlace}>🥈</Text>
-              <Text style={styles.podiumName}>
-                {podium.second?.name || "—"}
-              </Text>
-            </View>
-
-            {podium.third && (
-              <View style={styles.podiumItem}>
-                <Text style={styles.podiumPlace}>🥉</Text>
-                <Text style={styles.podiumName}>{podium.third.name}</Text>
+    <SafeAreaView style={styles.container}>
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+        {/* Подиум победителей */}
+        {podium.first && (
+          <View style={styles.podium}>
+            <Text style={styles.podiumTitle}>
+              {"🏆 " + t("finalPlaces") + " 🏆"}
+            </Text>
+            <View style={styles.podiumContainer}>
+              <View style={[styles.podiumItem, styles.firstPlace]}>
+                <Text style={styles.podiumPlace}>🥇</Text>
+                <Text style={styles.podiumName}>
+                  {getDisplayName(podium.first)}
+                </Text>
               </View>
-            )}
 
-            {podium.fourth && (
               <View style={styles.podiumItem}>
-                <Text style={styles.podiumPlace}>4</Text>
-                <Text style={styles.podiumName}>{podium.fourth.name}</Text>
+                <Text style={styles.podiumPlace}>🥈</Text>
+                <Text style={styles.podiumName}>
+                  {podium.second ? getDisplayName(podium.second) : "—"}
+                </Text>
               </View>
-            )}
-          </View>
-        </View>
-      )}
 
-      {/* Сетка турнира */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-        <View style={styles.bracket}>
-          {playoff.map((round, roundIndex) => {
-            const matchesCount = round.length;
-            const totalRounds = playoff.length;
-            const isLastRound = roundIndex === totalRounds - 1;
-            const hadPreviousTwoPairs =
-              roundIndex > 0 && playoff[roundIndex - 1]?.length === 2;
-
-            let roundTitle = "";
-            if (matchesCount === 4) {
-              roundTitle = `1/${Math.pow(2, playoff.length - roundIndex)} ${t("final")}`;
-            } else if (matchesCount === 2) {
-              if (isLastRound && hadPreviousTwoPairs) {
-                roundTitle = t("finalAndThirdPlace");
-              } else {
-                roundTitle = t("semifinal");
-              }
-            } else if (matchesCount === 1) {
-              roundTitle = t("final");
-            } else {
-              roundTitle = `1/${Math.pow(2, playoff.length - roundIndex)} ${t("final")}`;
-            }
-
-            const isFinalRound = isLastRound && hadPreviousTwoPairs;
-
-            return (
-              <View key={roundIndex} style={styles.roundColumn}>
-                <Text style={styles.roundTitle}>{roundTitle}</Text>
-
-                <View style={styles.matchesContainer}>
-                  {round.map((match, matchIndex) => {
-                    const isThirdPlaceMatch = isFinalRound && matchIndex === 1;
-                    const isFinalMatch = isFinalRound && matchIndex === 0;
-                    const [fighter1, fighter2] = match;
-                    const winnerKey = `${roundIndex}-${matchIndex}`;
-                    const winnerIndex = winners[winnerKey];
-
-                    return (
-                      <View
-                        key={matchIndex}
-                        style={[
-                          styles.matchWrapper,
-                          isFinalMatch && styles.finalMatchWrapper,
-                          isThirdPlaceMatch && styles.thirdPlaceMatchWrapper,
-                        ]}
-                      >
-                        <TouchableOpacity
-                          style={styles.matchCard}
-                          onPress={() => goToFight(roundIndex, matchIndex)}
-                          activeOpacity={0.8}
-                        >
-                          {(isFinalMatch || isThirdPlaceMatch) && (
-                            <View style={styles.matchBadge}>
-                              <Text style={styles.matchBadgeText}>
-                                {isFinalMatch
-                                  ? `🏆 ${t("final")}`
-                                  : `🥉 ${t("matchThirdPlace")}`}
-                              </Text>
-                            </View>
-                          )}
-
-                          {/* Первый боец */}
-                          <TouchableOpacity
-                            style={[
-                              styles.fighterRow,
-                              winnerIndex === 0 && styles.winnerRow,
-                            ]}
-                            onPress={(e) => {
-                              e.stopPropagation();
-                              handleFighterClick(roundIndex, matchIndex, 0);
-                            }}
-                            activeOpacity={0.7}
-                          >
-                            <Text style={styles.fighterName} numberOfLines={1}>
-                              {fighter1.name}
-                            </Text>
-                            <Text style={styles.fighterScore}>
-                              {fighter1.scores}
-                            </Text>
-                          </TouchableOpacity>
-
-                          <Text style={styles.vsDivider}>VS</Text>
-
-                          {/* Второй боец */}
-                          <TouchableOpacity
-                            style={[
-                              styles.fighterRow,
-                              winnerIndex === 1 && styles.winnerRow,
-                            ]}
-                            onPress={(e) => {
-                              e.stopPropagation();
-                              handleFighterClick(roundIndex, matchIndex, 1);
-                            }}
-                            activeOpacity={0.7}
-                          >
-                            <Text style={styles.fighterName} numberOfLines={1}>
-                              {fighter2.name}
-                            </Text>
-                            <Text style={styles.fighterScore}>
-                              {fighter2.scores}
-                            </Text>
-                          </TouchableOpacity>
-                        </TouchableOpacity>
-                      </View>
-                    );
-                  })}
+              {podium.third && (
+                <View style={styles.podiumItem}>
+                  <Text style={styles.podiumPlace}>🥉</Text>
+                  <Text style={styles.podiumName}>
+                    {getDisplayName(podium.third)}
+                  </Text>
                 </View>
-              </View>
-            );
-          })}
-        </View>
-      </ScrollView>
+              )}
 
-      {/* Кнопка следующего раунда */}
-      {playoff.length > 0 && !champion && canGenerateNextRound() && (
-        <View style={styles.controls}>
-          <Button
-            title={t("nextRound")}
-            onPress={generateNextRound}
-            style={styles.fullButton}
-          />
-        </View>
-      )}
-
-      {/* Кнопка сохранения на сервер */}
-      {podium.first &&
-        currentTournament &&
-        currentNominationId &&
-        currentWeaponId && (
-          <Button
-            title={t("saveToServer")}
-            onPress={saveOnServer}
-            style={styles.fullButton}
-          >
-            <HardDriveUpload size={20} color={Colors.fg} />
-          </Button>
+              {podium.fourth && (
+                <View style={styles.podiumItem}>
+                  <Text style={styles.podiumPlace}>4</Text>
+                  <Text style={styles.podiumName}>
+                    {getDisplayName(podium.fourth)}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
         )}
 
-      {/* Кнопка экспорта */}
-      <Button
-        title={t("save")}
-        onPress={() => exportExcel(playoff, `${t("playoff")}.xlsx`, true)}
-        style={styles.fullButton}
-      >
-        <Save size={20} color={Colors.fg} />
-      </Button>
-    </ScrollView>
+        {/* Сетка турнира */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={styles.bracket}>
+            {playoff.map((round, roundIndex) => {
+              const isPastPair = playoff.length - 1 > roundIndex;
+              const matchesCount = round.length;
+              const totalRounds = playoff.length;
+              const isLastRound = roundIndex === totalRounds - 1;
+              const hadPreviousTwoPairs =
+                roundIndex > 0 && playoff[roundIndex - 1]?.length === 2;
+
+              let roundTitle = "";
+              if (matchesCount === 2) {
+                if (isLastRound && hadPreviousTwoPairs) {
+                  roundTitle = t("finalAndThirdPlace");
+                } else {
+                  roundTitle = t("semifinal");
+                }
+              } else if (matchesCount === 1) {
+                roundTitle = t("final");
+              } else {
+                roundTitle = `1/${matchesCount} ${t("final")}`;
+              }
+
+              const isFinalRound = isLastRound && hadPreviousTwoPairs;
+
+              return (
+                <View key={roundIndex} style={styles.roundColumn}>
+                  <Text style={styles.roundTitle}>{roundTitle}</Text>
+
+                  <View style={styles.matchesContainer}>
+                    {round.map((match, matchIndex) => {
+                      const isThirdPlaceMatch =
+                        isFinalRound && matchIndex === 1;
+                      const isFinalMatch = isFinalRound && matchIndex === 0;
+                      const [fighter1, fighter2] = match;
+                      const winnerKey = `${roundIndex}-${matchIndex}`;
+                      const winnerIndex = winners[winnerKey];
+
+                      return (
+                        <View
+                          key={matchIndex}
+                          style={[
+                            styles.matchWrapper,
+                            isFinalMatch && styles.finalMatchWrapper,
+                            isThirdPlaceMatch && styles.thirdPlaceMatchWrapper,
+                          ]}
+                        >
+                          <TouchableOpacity
+                            style={[
+                              styles.matchCard,
+                              playoffIndex === roundIndex &&
+                                playoffMatchIndex === matchIndex &&
+                                styles.currentCard,
+                              isPastPair && {
+                                opacity: 0.7,
+                              },
+                            ]}
+                            onPress={() => goToFight(roundIndex, matchIndex)}
+                            disabled={isPastPair}
+                            activeOpacity={0.8}
+                          >
+                            {(isFinalMatch || isThirdPlaceMatch) && (
+                              <View
+                                style={[
+                                  styles.matchBadge,
+                                  isFinalMatch && { left: "60%" },
+                                ]}
+                              >
+                                <Text style={styles.matchBadgeText}>
+                                  {isFinalMatch
+                                    ? `🏆 ${t("final")}`
+                                    : `🥉 ${t("matchThirdPlace")}`}
+                                </Text>
+                              </View>
+                            )}
+
+                            {/* Первый боец/команда */}
+                            <TouchableOpacity
+                              style={[
+                                styles.fighterRow,
+                                winnerIndex === 0 && styles.winnerRow,
+                              ]}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                if (!isPastPair)
+                                  participantClick(roundIndex, matchIndex);
+                              }}
+                              activeOpacity={0.7}
+                              disabled={isPastPair}
+                            >
+                              <Text
+                                style={styles.fighterName}
+                                numberOfLines={1}
+                              >
+                                {getDisplayName(fighter1)}
+                              </Text>
+                              <Text style={styles.fighterScore}>
+                                {getItemScores(fighter1)}
+                              </Text>
+                            </TouchableOpacity>
+
+                            <Text style={styles.vsDivider}>VS</Text>
+
+                            {/* Второй боец/команда */}
+                            <TouchableOpacity
+                              style={[
+                                styles.fighterRow,
+                                winnerIndex === 1 && styles.winnerRow,
+                              ]}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                if (!isPastPair)
+                                  participantClick(roundIndex, matchIndex);
+                              }}
+                              activeOpacity={0.7}
+                              disabled={isPastPair}
+                            >
+                              <Text
+                                style={styles.fighterName}
+                                numberOfLines={1}
+                              >
+                                {getDisplayName(fighter2)}
+                              </Text>
+                              <Text style={styles.fighterScore}>
+                                {getItemScores(fighter2)}
+                              </Text>
+                            </TouchableOpacity>
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </ScrollView>
+
+        {isTriathlon && (
+          <SelectPair
+            poolIndex={virtualPoolIndex}
+            currentPairIndex={virtualPairIndex[virtualPoolIndex]}
+            selectPair={(idx) =>
+              setVirtualPairIndex((state) =>
+                changeValueInStateArray(state, idx, virtualPoolIndex),
+              )
+            }
+            fighterPairs={triathlonFighterPairs}
+            onPairsReordered={(newPairs) => {
+              setPlayoffTriathlon((state) => {
+                const buf = JSON.parse(JSON.stringify(state));
+                const currentTeamsPair = buf[playoffIndex][playoffMatchIndex];
+                const participantsPairs =
+                  newPairs[virtualPoolIndex][
+                    virtualPairIndex[virtualPoolIndex]
+                  ];
+
+                for (const [idx, pair] of [
+                  currentTeamsPair,
+                  currentTeamsPair,
+                ].entries()) {
+                  const team = pair[idx];
+                  buf[playoffIndex][playoffMatchIndex][idx] = {
+                    ...team,
+                    members: team.members.map((m) => {
+                      if (m.id === participantsPairs[0].id) {
+                        return participantsPairs[0];
+                      } else if (m.id === participantsPairs[1].id) {
+                        return participantsPairs[1];
+                      }
+
+                      return m;
+                    }),
+                  };
+                }
+
+                return buf;
+              });
+            }}
+            participants={[
+              playoffTriathlon[0]
+                .map((teamsPair) =>
+                  [teamsPair[0].members, teamsPair[1].members].flat(),
+                )
+                .flat(),
+            ]}
+            teams={triathlonTeams}
+            manualMode
+          />
+        )}
+
+        {/* Кнопка следующего раунда */}
+        {playoff.length > 0 && !champion && canGenerateNextRound() && (
+          <View style={styles.controls}>
+            <Button
+              title={t("nextRound")}
+              onPress={generateNextRound}
+              style={styles.fullButton}
+            />
+          </View>
+        )}
+
+        {/* Кнопка сохранения на сервер */}
+        {podium.first &&
+          currentTournament &&
+          currentNominationId &&
+          currentWeaponId && (
+            <Button
+              title={t("saveToServer")}
+              onPress={saveOnServer}
+              style={styles.fullButton}
+            >
+              <HardDriveUpload size={20} color={Colors.fg} />
+            </Button>
+          )}
+
+        {/* Кнопка экспорта */}
+        <Button
+          title={t("save")}
+          onPress={() =>
+            exportExcel(
+              isTriathlon
+                ? convertTriathlonToParticipantPairs(
+                    playoffTriathlon,
+                    teamCount,
+                  )
+                : playoffIndividual,
+              `${t("playoff")}.xlsx`,
+              podium,
+              isTriathlon
+                ? playoffTriathlon.map((pairs) => pairs.flat()).flat()
+                : undefined,
+              teamCount,
+            )
+          }
+          style={styles.fullButton}
+        >
+          <Save size={20} color={Colors.fg} />
+        </Button>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -497,7 +769,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#1a1a1a",
   },
-  // Подиум
   podium: {
     backgroundColor: `rgba(${Colors.accentRgb}, 0.1)`,
     borderRadius: 12,
@@ -546,7 +817,6 @@ const styles = StyleSheet.create({
     color: Colors.fg,
     textAlign: "center",
   },
-  // Сетка
   bracket: {
     flexDirection: "row",
     padding: 20,
@@ -633,9 +903,6 @@ const styles = StyleSheet.create({
     minWidth: 45,
     textAlign: "center",
   },
-  winnerRowText: {
-    color: Colors.fg,
-  },
   vsDivider: {
     textAlign: "center",
     fontFamily: Fonts.bold,
@@ -650,5 +917,8 @@ const styles = StyleSheet.create({
   fullButton: {
     marginBottom: 10,
     marginHorizontal: 16,
+  },
+  currentCard: {
+    borderColor: `rgba(${Colors.accentRgb}, 0.5)`,
   },
 });

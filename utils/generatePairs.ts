@@ -1,5 +1,5 @@
 import { fighterDefault } from "@/store";
-import { ParticipantType, TournamentSystem } from "@/typings";
+import { ParticipantType, TeamType, TournamentSystem } from "@/typings";
 
 export const generatePairs = (
   participants: ParticipantType[],
@@ -9,6 +9,8 @@ export const generatePairs = (
     React.SetStateAction<[ParticipantType, ParticipantType][][]>
   >,
   setCurrentPairIndex: React.Dispatch<React.SetStateAction<number[]>>,
+  currentRound?: number,
+  totalRounds?: number,
 ): [ParticipantType, ParticipantType][][] => {
   let pairs: [ParticipantType, ParticipantType][][] = [];
 
@@ -93,286 +95,17 @@ export const generatePairs = (
       if (!pairs[poolIndex]) pairs[poolIndex] = [];
       pairs[poolIndex].push(...tempPairs);
     });
-  } else if (tournamentSystem === TournamentSystem.SWISS) {
-    pairs = generateSwissPairs(participants, poolIndex);
-  }
-
-  /**
-   * Генерация пар для швейцарской системы с учётом Buchholz
-   */
-  function generateSwissPairs(
-    participantsArr: ParticipantType[],
-    poolIndex: number,
-  ): [ParticipantType, ParticipantType][][] {
-    const pairs: [ParticipantType, ParticipantType][][] = [];
-
-    // Фильтруем только активных участников (исключаем —)
-    const activeParticipants = participantsArr.filter((p) => p.name !== "—");
-
-    if (activeParticipants.length === 0) return pairs;
-
-    // 1. Сортируем участников по системе "победы -> Buchholz -> тех.очки"
-    const sorted = sortParticipantsBySwissCriteria(activeParticipants);
-
-    // 2. Группируем по ПОБЕДАМ (основной критерий швейцарской системы)
-    const winGroups = groupByWins(sorted);
-
-    // 3. Генерируем пары с учётом всех правил
-    const tempPairs = generatePairsFromGroups(winGroups);
-
-    // 4. Сортируем пары (баи в конец)
-    pairs[poolIndex] = sortPairsWithByes(tempPairs);
-
-    return pairs;
-  }
-
-  /**
-   * Сортировка участников по критериям швейцарской системы
-   */
-  function sortParticipantsBySwissCriteria(
-    participantsArr: ParticipantType[],
-  ): ParticipantType[] {
-    return [...participantsArr].sort((a, b) => {
-      // 1. Главный критерий - ПОБЕДЫ (по убыванию)
-      if (b.wins !== a.wins) return b.wins - a.wins;
-
-      // 2. При равенстве побед - Buchholz (кто играл с более сильными)
-      if (b.buchholz !== a.buchholz) return b.buchholz - a.buchholz;
-
-      // 3. Затем - меньше поражений
-      if (a.losses !== b.losses) return a.losses - b.losses;
-
-      // 4. Затем - больше технических очков
-      if (b.scores !== a.scores) return b.scores - a.scores;
-
-      // 5. Если всё равно - случайно
-      return Math.random() - 0.5;
-    });
-  }
-
-  /**
-   * Группировка по победам
-   */
-  function groupByWins(
-    participantsArr: ParticipantType[],
-  ): ParticipantType[][] {
-    const groups: ParticipantType[][] = [];
-    const winsMap = new Map<number, ParticipantType[]>();
-
-    participantsArr.forEach((p) => {
-      if (!winsMap.has(p.wins)) {
-        winsMap.set(p.wins, []);
-      }
-      winsMap.get(p.wins)!.push(p);
-    });
-
-    // Сортируем группы по убыванию побед
-    const sortedWins = Array.from(winsMap.keys()).sort((a, b) => b - a);
-
-    for (const wins of sortedWins) {
-      groups.push(winsMap.get(wins)!);
-    }
-
-    return groups;
-  }
-
-  /**
-   * Генерация пар из групп с учётом Buchholz
-   */
-  function generatePairsFromGroups(
-    groups: ParticipantType[][],
-  ): [ParticipantType, ParticipantType][] {
-    const localPairs: [ParticipantType, ParticipantType][] = [];
-    const used = new Set<string>();
-
-    // Очередь групп для обработки
-    const groupsQueue = [...groups];
-
-    while (groupsQueue.length > 0) {
-      const currentGroup = groupsQueue.shift()!;
-
-      // Сортируем участников внутри группы по Buchholz (для более справедливых пар)
-      const sortedGroup = [...currentGroup].sort((a, b) => {
-        // Внутри группы сначала те, у кого выше Buchholz
-        return (b.buchholz || 0) - (a.buchholz || 0);
-      });
-
-      // Временный массив для неспаренных участников текущей группы
-      const unpairedFromGroup: ParticipantType[] = [];
-
-      for (let i = 0; i < sortedGroup.length; i++) {
-        const player = sortedGroup[i];
-
-        // Пропускаем уже использованных
-        if (used.has(player.id)) continue;
-
-        // Ищем соперника в текущей группе
-        let opponent = findBestOpponent(player, sortedGroup, i, used);
-
-        if (opponent) {
-          // Определяем порядок (кто первый) на основе Buchholz
-          const [first, second] = determinePairOrder(player, opponent);
-          localPairs.push([first, second]);
-
-          used.add(player.id);
-          used.add(opponent.id);
-        } else {
-          // Если нет пары в текущей группе, сохраняем для следующего шага
-          unpairedFromGroup.push(player);
-        }
-      }
-
-      // Если остались неспаренные в текущей группе, пробуем найти им пары в соседних группах
-      if (unpairedFromGroup.length > 0) {
-        const remainingGroups = groupsQueue.filter((g) => g.length > 0);
-
-        for (const player of unpairedFromGroup) {
-          if (used.has(player.id)) continue;
-
-          // Ищем соперника в соседних группах
-          const opponent = findOpponentInNearbyGroups(
-            player,
-            remainingGroups,
-            used,
-          );
-
-          if (opponent) {
-            const [first, second] = determinePairOrder(player, opponent);
-            localPairs.push([first, second]);
-
-            used.add(player.id);
-            used.add(opponent.id);
-          } else {
-            // Если совсем нет соперника - даём —
-            localPairs.push([
-              player,
-              {
-                ...fighterDefault,
-                id: player.id,
-              },
-            ]);
-            used.add(player.id);
-          }
-        }
-      }
-    }
-
-    return localPairs;
-  }
-
-  /**
-   * Поиск лучшего соперника в группе с учётом Buchholz
-   */
-  function findBestOpponent(
-    player: ParticipantType,
-    group: ParticipantType[],
-    startIndex: number,
-    used: Set<string>,
-  ): ParticipantType | null {
-    const candidates: ParticipantType[] = [];
-
-    for (let j = startIndex + 1; j < group.length; j++) {
-      const candidate = group[j];
-
-      // Проверяем кандидата
-      if (used.has(candidate.id)) continue;
-      if (haveTheyPlayed(player, candidate)) continue;
-      if (Math.abs(player.buchholz - candidate.buchholz) > 3) continue; // Опционально
-
-      candidates.push(candidate);
-    }
-
-    if (candidates.length === 0) return null;
-
-    // Сортируем кандидатов по близости Buchholz
-    candidates.sort((a, b) => {
-      const diffA = Math.abs(player.buchholz - a.buchholz);
-      const diffB = Math.abs(player.buchholz - b.buchholz);
-      return diffA - diffB;
-    });
-
-    // Возвращаем наиболее подходящего
-    return candidates[0];
-  }
-
-  /**
-   * Поиск соперника в соседних группах
-   */
-  function findOpponentInNearbyGroups(
-    player: ParticipantType,
-    groups: ParticipantType[][],
-    used: Set<string>,
-  ): ParticipantType | null {
-    const playerWins = player.wins;
-    const candidates: ParticipantType[] = [];
-
-    for (const group of groups) {
-      if (group.length === 0) continue;
-
-      const groupWins = group[0].wins;
-      const winDiff = Math.abs(groupWins - playerWins);
-
-      // Только соседние по победам группы (разница не более 1)
-      if (winDiff > 1) continue;
-
-      for (const candidate of group) {
-        if (used.has(candidate.id)) continue;
-        if (haveTheyPlayed(player, candidate)) continue;
-        if (Math.abs(player.buchholz - candidate.buchholz) > 5) continue; // Больший допуск для межгрупповых пар
-
-        candidates.push(candidate);
-      }
-    }
-
-    if (candidates.length === 0) return null;
-
-    // Сортируем по близости Buchholz
-    candidates.sort((a, b) => {
-      const diffA = Math.abs(player.buchholz - a.buchholz);
-      const diffB = Math.abs(player.buchholz - b.buchholz);
-      return diffA - diffB;
-    });
-
-    return candidates[0];
-  }
-
-  /**
-   * Определение порядка в паре (кто первый) на основе Buchholz
-   */
-  function determinePairOrder(
-    a: ParticipantType,
-    b: ParticipantType,
-  ): [ParticipantType, ParticipantType] {
-    // Тот, у кого выше Buchholz, идёт первым (опционально)
-    return (a.buchholz || 0) >= (b.buchholz || 0) ? [a, b] : [b, a];
-  }
-
-  /**
-   * Проверка, играли ли участники друг с другом
-   */
-  function haveTheyPlayed(
-    player1: ParticipantType,
-    player2: ParticipantType,
-  ): boolean {
-    return (
-      player1.opponents?.includes(player2.id) ||
-      player2.opponents?.includes(player1.id)
+  } else if (
+    tournamentSystem === TournamentSystem.SWISS &&
+    currentRound &&
+    totalRounds
+  ) {
+    pairs = generateSwissPairs(
+      participants,
+      poolIndex,
+      currentRound,
+      totalRounds,
     );
-  }
-
-  /**
-   * Сортировка пар (баи в конец)
-   */
-  function sortPairsWithByes(
-    pairs: [ParticipantType, ParticipantType][],
-  ): [ParticipantType, ParticipantType][] {
-    return [...pairs].sort((a, b) => {
-      const aHasBye = a[1]?.name === "—";
-      const bHasBye = b[1]?.name === "—";
-
-      if (aHasBye === bHasBye) return 0;
-      return aHasBye ? 1 : -1;
-    });
   }
 
   // СОРТИРОВКА: пары с "—" в конец массива
@@ -401,3 +134,682 @@ export const generatePairs = (
   });
   return pairs;
 };
+
+/**
+ * Генерация пар для швейцарской системы с учётом Buchholz
+ */
+function generateSwissPairs(
+  participantsArr: ParticipantType[],
+  poolIndex: number,
+  currentRound: number,
+  totalRounds: number,
+): [ParticipantType, ParticipantType][][] {
+  const pairsArr: [ParticipantType, ParticipantType][][] = [];
+
+  // Фильтруем только активных участников (исключаем —)
+  const activeParticipants = participantsArr.filter((p) => p.name !== "—");
+
+  if (activeParticipants.length === 0) return pairsArr;
+
+  // 1. Сортируем участников по системе "победы -> Buchholz -> тех.очки"
+  const sorted = sortParticipantsBySwissCriteria(activeParticipants);
+
+  // 2. Группируем по ПОБЕДАМ (основной критерий швейцарской системы)
+  const winGroups = groupByWins(sorted);
+
+  // 3. Генерируем пары с учётом всех правил
+  const tempPairs = generatePairsFromGroups(winGroups);
+
+  // 4. Распределяем пары по 3 площадкам с учётом арены каждого участника
+  const arenaPairs = distributePairsToArenas(
+    tempPairs,
+    currentRound,
+    totalRounds,
+  );
+
+  // 5. Сортируем пары внутри каждой площадки (баи в конец)
+  for (let i = 0; i < 3; i++) {
+    if (arenaPairs[i] && arenaPairs[i].length > 0) {
+      arenaPairs[i] = sortPairsWithByes(arenaPairs[i]);
+    } else {
+      arenaPairs[i] = [];
+    }
+  }
+
+  pairsArr[poolIndex] = arenaPairs.flat();
+
+  // 6. Обновляем арену у каждого участника в соответствии с распределением
+  updateParticipantsArena(activeParticipants, arenaPairs);
+
+  return pairsArr;
+}
+
+/**
+ * Распределение пар по 3 площадкам с учётом существующей арены участников
+ */
+function distributePairsToArenas(
+  pairs: [ParticipantType, ParticipantType][],
+  currentRound: number,
+  totalRounds: number,
+): [ParticipantType, ParticipantType][][] {
+  const arenas: [ParticipantType, ParticipantType][][] = [[], [], []];
+
+  if (pairs.length === 0) return arenas;
+
+  // 1. Сначала группируем пары по существующим аренам
+  const pairsByArena = new Map<number, typeof pairs>();
+
+  for (const pair of pairs) {
+    let arena = -1;
+    for (const player of pair) {
+      if (
+        player.name !== "—" &&
+        player.arena !== undefined &&
+        player.arena >= 0 &&
+        player.arena < 3
+      ) {
+        arena = player.arena;
+        break;
+      }
+    }
+
+    if (!pairsByArena.has(arena)) {
+      pairsByArena.set(arena, []);
+    }
+    pairsByArena.get(arena)!.push(pair);
+  }
+
+  // 2. Заполняем существующие арены
+  for (const [arena, arenaPairs] of pairsByArena) {
+    if (arena >= 0 && arena < 3) {
+      arenas[arena] = arenaPairs;
+    }
+  }
+
+  // 3. Распределяем нераспределённые пары
+  const unassigned = pairsByArena.get(-1) || [];
+
+  if (unassigned.length > 0) {
+    // Сортируем по силе
+    const sorted = [...unassigned].sort((a, b) => {
+      const strengthA =
+        a.reduce((sum, p) => sum + (p.buchholz || 0), 0) /
+        a.filter((p) => p.name !== "—").length;
+      const strengthB =
+        b.reduce((sum, p) => sum + (p.buchholz || 0), 0) /
+        b.filter((p) => p.name !== "—").length;
+      return strengthB - strengthA;
+    });
+
+    // Определяем, сколько пар нужно в каждую арену
+    const totalPairs = sorted.length;
+    const existingCounts = arenas.map((a) => a.length);
+    const totalExisting = existingCounts.reduce((s, c) => s + c, 0);
+    const totalAll = totalPairs + totalExisting;
+
+    // ===== ДИНАМИЧЕСКОЕ РАСПРЕДЕЛЕНИЕ В ЗАВИСИМОСТИ ОТ КРУГА =====
+    // Вычисляем прогресс турнира
+    const progress = currentRound / totalRounds;
+
+    // Базовое распределение
+    let strongPercent = 0.35;
+    let mediumPercent = 0.35;
+
+    // В поздних кругах смещаем акцент на сильные пары
+    if (progress > 0.7) {
+      strongPercent = 0.4;
+      mediumPercent = 0.35;
+    }
+
+    // В самых поздних кругах ещё больше сильных
+    if (progress > 0.9) {
+      strongPercent = 0.45;
+      mediumPercent = 0.35;
+    }
+
+    // Ранние круги - более равномерное распределение
+    if (progress <= 0.3) {
+      strongPercent = 0.33;
+      mediumPercent = 0.33;
+    }
+
+    // Вычисляем целевое количество пар для каждой арены
+    let targetStrong = Math.floor(totalAll * strongPercent);
+    let targetMedium = Math.floor(totalAll * mediumPercent);
+    let targetWeak = totalAll - targetStrong - targetMedium;
+
+    // Гарантируем минимум 1 пару на арену (если есть хотя бы 3 пары)
+    const minPerArena = Math.min(1, Math.floor(totalAll / 3));
+    targetStrong = Math.max(targetStrong, minPerArena);
+    targetMedium = Math.max(targetMedium, minPerArena);
+    targetWeak = Math.max(targetWeak, minPerArena);
+
+    // Если сумма превышает totalAll, корректируем (уменьшаем слабую арену)
+    let totalTarget = targetStrong + targetMedium + targetWeak;
+    if (totalTarget > totalAll) {
+      const excess = totalTarget - totalAll;
+      targetWeak = Math.max(minPerArena, targetWeak - excess);
+
+      totalTarget = targetStrong + targetMedium + targetWeak;
+      if (totalTarget > totalAll) {
+        const excess2 = totalTarget - totalAll;
+        targetMedium = Math.max(minPerArena, targetMedium - excess2);
+
+        totalTarget = targetStrong + targetMedium + targetWeak;
+        if (totalTarget > totalAll) {
+          const excess3 = totalTarget - totalAll;
+          targetStrong = Math.max(minPerArena, targetStrong - excess3);
+        }
+      }
+    }
+
+    // Сколько нужно добавить в каждую арену
+    let neededStrong = Math.max(0, targetStrong - existingCounts[0]);
+    let neededMedium = Math.max(0, targetMedium - existingCounts[1]);
+
+    // Распределяем пары по аренам
+    let index = 0;
+
+    // Арена 0 (сильная)
+    while (neededStrong > 0 && index < sorted.length) {
+      arenas[0].push(sorted[index]);
+      index++;
+      neededStrong--;
+    }
+
+    // Арена 1 (средняя)
+    while (neededMedium > 0 && index < sorted.length) {
+      arenas[1].push(sorted[index]);
+      index++;
+      neededMedium--;
+    }
+
+    // Арена 2 (слабая) - все оставшиеся
+    while (index < sorted.length) {
+      arenas[2].push(sorted[index]);
+      index++;
+    }
+  }
+
+  // 4. Финальная проверка: все арены должны быть заполнены
+  const emptyArenas = arenas
+    .map((a, i) => (a.length === 0 ? i : -1))
+    .filter((i) => i >= 0);
+
+  if (emptyArenas.length > 0) {
+    // Находим арену с максимальным количеством пар
+    let maxCount = 0;
+    let maxArena = 0;
+    for (let i = 0; i < arenas.length; i++) {
+      if (arenas[i].length > maxCount) {
+        maxCount = arenas[i].length;
+        maxArena = i;
+      }
+    }
+
+    // Перемещаем пары в пустые арены
+    for (const emptyArena of emptyArenas) {
+      if (arenas[maxArena].length > 1) {
+        const pair = arenas[maxArena].pop()!;
+        arenas[emptyArena].push(pair);
+      }
+    }
+  }
+
+  return arenas;
+}
+
+/**
+ * Обновление арены у участников после распределения
+ */
+function updateParticipantsArena(
+  participants: ParticipantType[],
+  arenaPairs: [ParticipantType, ParticipantType][][],
+): void {
+  // Создаём маппинг игрок -> арена
+  const playerArenaMap = new Map<string, number>();
+
+  for (let arenaIndex = 0; arenaIndex < arenaPairs.length; arenaIndex++) {
+    const pairs = arenaPairs[arenaIndex];
+    for (const pair of pairs) {
+      for (const player of pair) {
+        if (player.name !== "—") {
+          playerArenaMap.set(player.id, arenaIndex + 1);
+        }
+      }
+    }
+  }
+
+  // Обновляем арену у участников
+  for (const participant of participants) {
+    const arena = playerArenaMap.get(participant.id);
+    if (arena !== undefined) {
+      participant.arena = arena;
+    }
+  }
+}
+
+/**
+ * Сортировка участников по критериям швейцарской системы
+ */
+function sortParticipantsBySwissCriteria(
+  participantsArr: ParticipantType[],
+): ParticipantType[] {
+  return [...participantsArr].sort((a, b) => {
+    // 1. Главный критерий - ПОБЕДЫ (по убыванию)
+    if (b.wins !== a.wins) return b.wins - a.wins;
+
+    // 2. При равенстве побед - Buchholz (кто играл с более сильными)
+    if (b.buchholz !== a.buchholz) return b.buchholz - a.buchholz;
+
+    // 3. Затем - меньше поражений
+    if (a.losses !== b.losses) return a.losses - b.losses;
+
+    // 4. Затем - больше технических очков
+    if (b.scores !== a.scores) return b.scores - a.scores;
+
+    // 5. Если всё равно - случайно
+    return Math.random() - 0.5;
+  });
+}
+
+/**
+ * Группировка по победам
+ */
+function groupByWins(participantsArr: ParticipantType[]): ParticipantType[][] {
+  const groups: ParticipantType[][] = [];
+  const winsMap = new Map<number, ParticipantType[]>();
+
+  participantsArr.forEach((p) => {
+    if (!winsMap.has(p.wins)) {
+      winsMap.set(p.wins, []);
+    }
+    winsMap.get(p.wins)!.push(p);
+  });
+
+  const sortedWins = Array.from(winsMap.keys()).sort((a, b) => b - a);
+
+  for (const wins of sortedWins) {
+    groups.push(winsMap.get(wins)!);
+  }
+
+  return groups;
+}
+
+/**
+ * Генерация пар из групп с учётом Buchholz
+ */
+function generatePairsFromGroups(
+  groups: ParticipantType[][],
+): [ParticipantType, ParticipantType][] {
+  const localPairs: [ParticipantType, ParticipantType][] = [];
+  const used = new Set<string>();
+
+  const groupsQueue = [...groups];
+
+  while (groupsQueue.length > 0) {
+    const currentGroup = groupsQueue.shift()!;
+
+    const sortedGroup = [...currentGroup].sort((a, b) => {
+      return (b.buchholz || 0) - (a.buchholz || 0);
+    });
+
+    const unpairedFromGroup: ParticipantType[] = [];
+
+    for (let i = 0; i < sortedGroup.length; i++) {
+      const player = sortedGroup[i];
+
+      if (used.has(player.id)) continue;
+
+      let opponent = findBestOpponent(player, sortedGroup, i, used);
+
+      if (opponent) {
+        const [first, second] = determinePairOrder(player, opponent);
+        localPairs.push([first, second]);
+        used.add(player.id);
+        used.add(opponent.id);
+      } else {
+        unpairedFromGroup.push(player);
+      }
+    }
+
+    if (unpairedFromGroup.length > 0) {
+      const remainingGroups = groupsQueue.filter((g) => g.length > 0);
+
+      for (const player of unpairedFromGroup) {
+        if (used.has(player.id)) continue;
+
+        const opponent = findOpponentInNearbyGroups(
+          player,
+          remainingGroups,
+          used,
+        );
+
+        if (opponent) {
+          const [first, second] = determinePairOrder(player, opponent);
+          localPairs.push([first, second]);
+          used.add(player.id);
+          used.add(opponent.id);
+        } else {
+          // Если совсем нет соперника - даём бай
+          localPairs.push([
+            player,
+            {
+              ...fighterDefault,
+              arena: player?.arena,
+            },
+          ]);
+          used.add(player.id);
+        }
+      }
+    }
+  }
+
+  return localPairs;
+}
+
+/**
+ * Поиск лучшего соперника в группе
+ */
+function findBestOpponent(
+  player: ParticipantType,
+  group: ParticipantType[],
+  startIndex: number,
+  used: Set<string>,
+): ParticipantType | null {
+  const candidates: ParticipantType[] = [];
+
+  for (let j = startIndex + 1; j < group.length; j++) {
+    const candidate = group[j];
+
+    if (used.has(candidate.id)) continue;
+    if (haveTheyPlayed(player, candidate)) continue;
+    if (Math.abs(player.buchholz - candidate.buchholz) > 3) continue;
+
+    // Если у игроков уже есть арены, предпочитаем соперников с той же арены
+    if (player.arena !== undefined && candidate.arena !== undefined) {
+      // Не строгое требование, а предпочтение
+      // Можно добавить вес в сортировку
+    }
+
+    candidates.push(candidate);
+  }
+
+  if (candidates.length === 0) return null;
+
+  candidates.sort((a, b) => {
+    // Сначала по близости Buchholz
+    const diffA = Math.abs(player.buchholz - a.buchholz);
+    const diffB = Math.abs(player.buchholz - b.buchholz);
+
+    // Если разница в Buchholz одинаковая, предпочитаем ту же арену
+    if (diffA === diffB) {
+      const sameArenaA = player.arena === a.arena ? 0 : 1;
+      const sameArenaB = player.arena === b.arena ? 0 : 1;
+      return sameArenaA - sameArenaB;
+    }
+
+    return diffA - diffB;
+  });
+
+  return candidates[0];
+}
+
+/**
+ * Поиск соперника в соседних группах
+ */
+function findOpponentInNearbyGroups(
+  player: ParticipantType,
+  groups: ParticipantType[][],
+  used: Set<string>,
+): ParticipantType | null {
+  const playerWins = player.wins;
+  const candidates: ParticipantType[] = [];
+
+  for (const group of groups) {
+    if (group.length === 0) continue;
+
+    const groupWins = group[0].wins;
+    const winDiff = Math.abs(groupWins - playerWins);
+
+    if (winDiff > 1) continue;
+
+    for (const candidate of group) {
+      if (used.has(candidate.id)) continue;
+      if (haveTheyPlayed(player, candidate)) continue;
+      if (Math.abs(player.buchholz - candidate.buchholz) > 5) continue;
+
+      candidates.push(candidate);
+    }
+  }
+
+  if (candidates.length === 0) return null;
+
+  candidates.sort((a, b) => {
+    // Сначала по близости Buchholz
+    const diffA = Math.abs(player.buchholz - a.buchholz);
+    const diffB = Math.abs(player.buchholz - b.buchholz);
+
+    // Если разница в Buchholz одинаковая, предпочитаем ту же арену
+    if (diffA === diffB) {
+      const sameArenaA = player.arena === a.arena ? 0 : 1;
+      const sameArenaB = player.arena === b.arena ? 0 : 1;
+      return sameArenaA - sameArenaB;
+    }
+
+    return diffA - diffB;
+  });
+
+  return candidates[0];
+}
+
+/**
+ * Определение порядка в паре
+ */
+function determinePairOrder(
+  a: ParticipantType,
+  b: ParticipantType,
+): [ParticipantType, ParticipantType] {
+  return (a.buchholz || 0) >= (b.buchholz || 0) ? [a, b] : [b, a];
+}
+
+/**
+ * Проверка, играли ли участники друг с другом
+ */
+function haveTheyPlayed(
+  player1: ParticipantType,
+  player2: ParticipantType,
+): boolean {
+  return (
+    player1.opponents?.includes(player2.id) ||
+    player2.opponents?.includes(player1.id)
+  );
+}
+
+/**
+ * Сортировка пар (баи в конец)
+ */
+function sortPairsWithByes(
+  pairs: [ParticipantType, ParticipantType][],
+): [ParticipantType, ParticipantType][] {
+  return [...pairs].sort((a, b) => {
+    const aHasBye = a[1]?.name === "—" || a[0]?.name === "—";
+    const bHasBye = b[1]?.name === "—" || b[0]?.name === "—";
+
+    if (aHasBye === bHasBye) return 0;
+    return aHasBye ? 1 : -1;
+  });
+}
+
+/**
+ * Рандомно выбирает 2 разные команды, которые ещё не играли друг с другом
+ * @param teams - массив команд
+ * @param poolDuels - массив пула дуэлей (каждый элемент - массив пар [ParticipantType, ParticipantType])
+ * @returns [команда1, команда2] или null, если все пары уже сыграны
+ */
+export function getRandomTwoTeams(
+  teams: TeamType[],
+  poolDuels: [ParticipantType, ParticipantType][][],
+): [TeamType, TeamType] | null {
+  // 1. Проверяем, что есть хотя бы 2 команды
+  if (!teams || teams.length < 2) {
+    return null;
+  }
+
+  // 2. Собираем все пары команд, которые уже сыграли
+  const playedPairs = new Set<string>();
+  const matchCount = new Map<number, number>();
+  const getPairKey = (team1Id: number, team2Id: number) =>
+    [team1Id, team2Id].sort((a, b) => a - b).join("-");
+
+  // Инициализируем счётчики матчей для всех команд
+  teams.forEach((team) => {
+    matchCount.set(team.id, 0);
+  });
+
+  poolDuels.forEach((matchPairs) => {
+    // В каждом матче может быть несколько боёв (для триатлона - 3 боя)
+    let team1Id: number | null = null;
+    let team2Id: number | null = null;
+
+    matchPairs.forEach((pair) => {
+      const fencer1 = pair[0];
+      const fencer2 = pair[1];
+
+      // Находим команды по участникам
+      const team1 = teams.find((t) => t.members.includes(fencer1.id));
+      const team2 = teams.find((t) => t.members.includes(fencer2.id));
+
+      if (team1 && team2) {
+        if (team1Id === null) team1Id = team1.id;
+        if (team2Id === null) team2Id = team2.id;
+      }
+    });
+
+    if (team1Id !== null && team2Id !== null) {
+      const pairKey = getPairKey(team1Id, team2Id);
+      playedPairs.add(pairKey);
+
+      // Обновляем счётчики матчей
+      matchCount.set(team1Id, (matchCount.get(team1Id) || 0) + 1);
+      matchCount.set(team2Id, (matchCount.get(team2Id) || 0) + 1);
+    }
+  });
+
+  // 3. Проверяем, не сыграны ли все пары
+  const totalPossiblePairs = (teams.length * (teams.length - 1)) / 2;
+  if (playedPairs.size >= totalPossiblePairs) {
+    return null;
+  }
+
+  // 4. Собираем все возможные пары, которые ещё не играли
+  const availablePairs: [TeamType, TeamType][] = [];
+
+  for (let i = 0; i < teams.length; i++) {
+    for (let j = i + 1; j < teams.length; j++) {
+      const team1 = teams[i];
+      const team2 = teams[j];
+
+      if (team1.id === team2.id) continue;
+
+      const pairKey = getPairKey(team1.id, team2.id);
+      const isPlayed = playedPairs.has(pairKey);
+
+      if (!isPlayed) {
+        availablePairs.push([team1, team2]);
+      }
+    }
+  }
+
+  if (availablePairs.length === 0) {
+    return null;
+  }
+
+  // 5. Находим команды с НАИМЕНЬШИМ количеством матчей
+  let minCount = Infinity;
+  const minTeams: TeamType[] = [];
+
+  for (const team of teams) {
+    const count = matchCount.get(team.id) || 0;
+    if (count < minCount) {
+      minCount = count;
+      minTeams.length = 0;
+      minTeams.push(team);
+    } else if (count === minCount) {
+      minTeams.push(team);
+    }
+  }
+
+  let selectedPair: [TeamType, TeamType] | null = null;
+
+  // 6. Если есть хотя бы 2 команды с минимальным количеством матчей
+  if (minTeams.length >= 2) {
+    const shuffled = [...minTeams];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+
+    for (let i = 0; i < shuffled.length; i++) {
+      for (let j = i + 1; j < shuffled.length; j++) {
+        if (shuffled[i].id === shuffled[j].id) continue;
+
+        const pairKey = getPairKey(shuffled[i].id, shuffled[j].id);
+
+        if (!playedPairs.has(pairKey)) {
+          selectedPair = [shuffled[i], shuffled[j]];
+          break;
+        }
+      }
+      if (selectedPair) break;
+    }
+  }
+
+  // 7. Если не нашли среди минимальных, используем балансировку
+  if (!selectedPair) {
+    const sorted = [...availablePairs].sort((a, b) => {
+      const aCount =
+        (matchCount.get(a[0].id) || 0) + (matchCount.get(a[1].id) || 0);
+      const bCount =
+        (matchCount.get(b[0].id) || 0) + (matchCount.get(b[1].id) || 0);
+      return aCount - bCount;
+    });
+
+    const minTotal =
+      (matchCount.get(sorted[0][0].id) || 0) +
+      (matchCount.get(sorted[0][1].id) || 0);
+
+    const candidates = sorted.filter((pair) => {
+      const total =
+        (matchCount.get(pair[0].id) || 0) + (matchCount.get(pair[1].id) || 0);
+      return total === minTotal;
+    });
+
+    const shuffled = [...candidates];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+
+    for (const pair of shuffled) {
+      if (pair[0].id === pair[1].id) continue;
+
+      const pairKey = getPairKey(pair[0].id, pair[1].id);
+
+      if (!playedPairs.has(pairKey)) {
+        selectedPair = pair;
+        break;
+      }
+    }
+  }
+
+  if (!selectedPair) {
+    return null;
+  }
+
+  if (selectedPair[0].id === selectedPair[1].id) {
+    return null;
+  }
+
+  return selectedPair;
+}

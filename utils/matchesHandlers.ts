@@ -1,14 +1,22 @@
 import { fighterDefault } from "@/store";
-import { ParticipantType } from "@/typings";
+import {
+  ParticipantPlayoffType,
+  ParticipantType,
+  TeamPlayOffType,
+  TeamStats,
+  TeamType,
+} from "@/typings";
 
-export const getTopThreeFighters = (duels: ParticipantType[][][]): ParticipantType[] => {
+export const getTopThreeFighters = (
+  duels: ParticipantType[][][],
+): ParticipantType[] => {
   // Создаем объект для подсчета побед
   const winsMap: Record<string, ParticipantType> = {};
 
   // Перебираем все дуэли и бои
-  duels.forEach(round => {
-    round.forEach(match => {
-      match.forEach(fighter => {
+  duels.forEach((round) => {
+    round.forEach((match) => {
+      match.forEach((fighter) => {
         const key = fighter.id;
 
         if (!winsMap[key]) {
@@ -23,7 +31,7 @@ export const getTopThreeFighters = (duels: ParticipantType[][][]): ParticipantTy
   // Преобразуем в массив и сортируем по количеству побед
   const fightersWithWins = Object.values(winsMap);
   fightersWithWins.sort((a, b) => b.wins - a.wins);
-  if (fightersWithWins.length < 3) fightersWithWins.push({ ...fighterDefault })
+  if (fightersWithWins.length < 3) fightersWithWins.push({ ...fighterDefault });
 
   // Берем топ-3 и возвращаем только информацию о бойцах
   return fightersWithWins.slice(0, 3);
@@ -33,9 +41,7 @@ export const getTopThreeFighters = (duels: ParticipantType[][][]): ParticipantTy
  * Определение победителей в круговой системе
  * Возвращает массив из трёх лучших участников (1-е, 2-е, 3-е место)
  */
-export function getWinnersRobin(
-  participants: ParticipantType[]
-): {
+export function getWinnersRobin(participants: ParticipantType[]): {
   winners: ParticipantType[];
   ranking: ParticipantType[]; // полный рейтинг на случай если нужно
 } {
@@ -44,7 +50,7 @@ export function getWinnersRobin(
   }
 
   // 1. Вычисляем дополнительные показатели для каждого участника
-  const participantsWithStats = participants.map(p => {
+  const participantsWithStats = participants.map((p) => {
     const totalFights = p.wins + p.losses + p.draws;
     const tournamentPoints = p.wins * 3 + p.draws; // 3 за победу, 1 за ничью
 
@@ -52,7 +58,7 @@ export function getWinnersRobin(
       ...p,
       tournamentPoints,
       totalFights,
-      avgScorePerFight: totalFights > 0 ? p.scores / totalFights : 0
+      avgScorePerFight: totalFights > 0 ? p.scores / totalFights : 0,
     };
   });
 
@@ -101,12 +107,12 @@ export function getWinnersRobin(
 
   return {
     winners: [sorted[0], sorted[1], sorted[2]],
-    ranking: sorted
+    ranking: sorted,
   };
 }
 
 export function getWinnersSwiss(participants: ParticipantType[]) {
-  const sortedParticipants =  [...participants].sort((a, b) => {
+  const sortedParticipants = [...participants].sort((a, b) => {
     // 1. Главный критерий - ОЧКИ (победы + 0.5*ничьи)
     const pointsA = a.wins + a.draws * 0.5;
     const pointsB = b.wins + b.draws * 0.5;
@@ -141,13 +147,13 @@ export function getWinnersSwiss(participants: ParticipantType[]) {
 
   return {
     winners: sortedParticipants.slice(0, 3),
-    ranking: sortedParticipants
-  }
+    ranking: sortedParticipants,
+  };
 }
 
 function calculateMedianBuchholz(
   fighter: ParticipantType,
-  allParticipants: ParticipantType[]
+  allParticipants: ParticipantType[],
 ): number {
   // Если нет соперников, возвращаем 0
   if (!fighter.opponents || fighter.opponents.length === 0) {
@@ -158,7 +164,7 @@ function calculateMedianBuchholz(
   const opponentsPoints: number[] = [];
 
   for (const opponentId of fighter.opponents) {
-    const opponent = allParticipants.find(p => p.id === opponentId);
+    const opponent = allParticipants.find((p) => p.id === opponentId);
     if (opponent) {
       // Используем те же очки, что и в основном критерии
       const opponentPoints = opponent.wins + opponent.draws * 0.5;
@@ -175,18 +181,21 @@ function calculateMedianBuchholz(
   opponentsPoints.sort((a, b) => a - b);
 
   // Убираем лучшего и худшего соперника
-  opponentsPoints.pop();      // убираем лучшего
-  opponentsPoints.shift();    // убираем худшего
+  opponentsPoints.pop(); // убираем лучшего
+  opponentsPoints.shift(); // убираем худшего
 
   // Суммируем оставшиеся
   return opponentsPoints.reduce((sum, points) => sum + points, 0);
 }
 
-export function getAllInOneParticipants(duels: ParticipantType[][][], fightersBuchholz?: {[id: string]: number}) {
+export function getAllInOneParticipants(
+  duels: ParticipantType[][][],
+  fightersBuchholz?: { [id: string]: number },
+) {
   const allInOneParticipants: Record<string, ParticipantType> = {};
-  duels.forEach(round => {
-    round.forEach(match => {
-      match.forEach(fighter => {
+  duels.forEach((round) => {
+    round.forEach((match) => {
+      match.forEach((fighter) => {
         const key = fighter.id;
 
         if (!allInOneParticipants[key]) {
@@ -196,7 +205,9 @@ export function getAllInOneParticipants(duels: ParticipantType[][][], fightersBu
             draws: 0,
             losses: 0,
             scores: 0,
-            buchholz: fightersBuchholz ? fightersBuchholz[key] : fighter.buchholz
+            buchholz: fightersBuchholz
+              ? fightersBuchholz[key]
+              : fighter.buchholz,
           };
         }
 
@@ -224,8 +235,8 @@ export type MatchType = {
   fighter2Id: string;
   fighter1Name: string;
   fighter2Name: string;
-  fighter1Score: number;  // очки первого бойца
-  fighter2Score: number;  // очки второго бойца
+  fighter1Score: number; // очки первого бойца
+  fighter2Score: number; // очки второго бойца
   fighter1Stats?: {
     wins: number;
     draws: number;
@@ -238,18 +249,20 @@ export type MatchType = {
     losses: number;
     scores: number;
   };
-  status: "scheduled"|"ongoing"|"completed"
+  status: "scheduled" | "ongoing" | "completed";
   winnerId: string | null;
   round: number;
-}
+};
 
 /**
- * Расчёт SD (разницы очков) для всех участников на основе массива пар
+ * Расчёт RD (разницы очков) для всех участников на основе массива пар
  * @param pairs - массив пар формата ParticipantType[][][], где самый вложенный массив - пара бойцов
- * @returns Map<string, number> где ключ - id бойца, значение - его SD
+ * @returns Map<string, number> где ключ - id бойца, значение - его RD
  */
-export function calculateAllSD(pairs: ParticipantType[][][]): Map<string, number> {
-  // Словарь для хранения SD каждого бойца
+export function calculateAllRD(
+  pairs: ParticipantType[][][],
+): Map<string, number> {
+  // Словарь для хранения RD каждого бойца
   const sdMap = new Map<string, number>();
 
   // Проходим по всем пулам
@@ -264,217 +277,23 @@ export function calculateAllSD(pairs: ParticipantType[][][]): Map<string, number
       // Пропускаем пары с —
       if (fighter1.name === "—" || fighter2.name === "—") continue;
 
-      // Вычисляем SD для этой пары
-      // SD = очки первого - очки второго (в этом сходе)
+      // Вычисляем RD для этой пары
+      // RD = очки первого - очки второго (в этом сходе)
       // Но у нас есть только общие scores, а не очки за конкретный бой
       // Поэтому используем разницу в scores между бойцами как приближение
       const sdForThisMatch = fighter1.scores - fighter2.scores;
 
-      // Обновляем SD для первого бойца
+      // Обновляем RD для первого бойца
       const currentSD1 = sdMap.get(fighter1.id) || 0;
       sdMap.set(fighter1.id, currentSD1 + sdForThisMatch);
 
-      // Обновляем SD для второго бойца (с обратным знаком)
+      // Обновляем RD для второго бойца (с обратным знаком)
       const currentSD2 = sdMap.get(fighter2.id) || 0;
       sdMap.set(fighter2.id, currentSD2 - sdForThisMatch);
     }
   }
 
   return sdMap;
-}
-
-/**
- * Альтернативная версия, которая пытается определить реальные очки за этот бой
- * Предполагает, что у бойцов есть история или мы можем вычислить разницу
- */
-export function calculateAllSDAdvanced(pairs: ParticipantType[][][]): Map<string, number> {
-  const sdMap = new Map<string, number>();
-
-  for (const pool of pairs) {
-    for (const pair of pool) {
-      if (pair.length !== 2) continue;
-
-      const [fighter1, fighter2] = pair;
-
-      if (fighter1.name === "—" || fighter2.name === "—") continue;
-
-      // Пытаемся определить, сколько очков каждый получил в этом бою
-      const fightResult = determineFightResult(fighter1, fighter2);
-
-      if (fightResult) {
-        const sdForFighter1 = fightResult.fighter1Score - fightResult.fighter2Score;
-
-        sdMap.set(fighter1.id, (sdMap.get(fighter1.id) || 0) + sdForFighter1);
-        sdMap.set(fighter2.id, (sdMap.get(fighter2.id) || 0) - sdForFighter1);
-      }
-    }
-  }
-
-  return sdMap;
-}
-
-/**
- * Определение результата боя между двумя бойцами
- * Пытается понять, сколько очков каждый набрал в этом конкретном бою
- */
-function determineFightResult(
-  fighter1: ParticipantType,
-  fighter2: ParticipantType
-): { fighter1Score: number; fighter2Score: number } | null {
-
-  // Способ 1: Если у бойцов есть поле lastMatchScore
-  const f1 = fighter1 as any;
-  const f2 = fighter2 as any;
-
-  if (f1.lastMatchScore?.opponentId === fighter2.id) {
-    return {
-      fighter1Score: f1.lastMatchScore.myScore,
-      fighter2Score: f1.lastMatchScore.opponentScore
-    };
-  }
-
-  if (f2.lastMatchScore?.opponentId === fighter1.id) {
-    return {
-      fighter1Score: f2.lastMatchScore.opponentScore,
-      fighter2Score: f2.lastMatchScore.myScore
-    };
-  }
-
-  // Способ 2: Если есть matchResults
-  if (f1.matchResults?.[fighter2.id]) {
-    const result = f1.matchResults[fighter2.id];
-    return {
-      fighter1Score: result.myScore ?? result.fighter1Score ?? 0,
-      fighter2Score: result.opponentScore ?? result.fighter2Score ?? 0
-    };
-  }
-
-  if (f2.matchResults?.[fighter1.id]) {
-    const result = f2.matchResults[fighter1.id];
-    return {
-      fighter1Score: result.opponentScore ?? result.fighter2Score ?? 0,
-      fighter2Score: result.myScore ?? result.fighter1Score ?? 0
-    };
-  }
-
-  // Способ 3: Если есть matchHistory
-  if (Array.isArray(f1.matchHistory)) {
-    const match = f1.matchHistory.find((m: any) => m.opponentId === fighter2.id);
-    if (match) {
-      return {
-        fighter1Score: match.myScore ?? match.score1 ?? 0,
-        fighter2Score: match.opponentScore ?? match.score2 ?? 0
-      };
-    }
-  }
-
-  if (Array.isArray(f2.matchHistory)) {
-    const match = f2.matchHistory.find((m: any) => m.opponentId === fighter1.id);
-    if (match) {
-      return {
-        fighter1Score: match.opponentScore ?? match.score2 ?? 0,
-        fighter2Score: match.myScore ?? match.score1 ?? 0
-      };
-    }
-  }
-
-  // Если ничего не нашли, используем разницу в общих scores
-  // Это приближение, но может работать если scores обновляются после каждого боя
-  const scoreDiff = fighter1.scores - fighter2.scores;
-
-  // Предполагаем, что разница в scores примерно равна разнице в этом бою
-  // Это неточно, если бойцы уже провели несколько боёв
-  return {
-    fighter1Score: Math.max(0, scoreDiff),
-    fighter2Score: Math.max(0, -scoreDiff)
-  };
-}
-
-/**
- * Самая простая версия - просто суммируем scores всех бойцов
- * и вычитаем друг из друга
- */
-export function calculateAllSDSimple(pairs: ParticipantType[][][]): Map<string, number> {
-  const totalScores = new Map<string, number>();
-  const fightsCount = new Map<string, number>();
-
-  // Сначала суммируем все scores и считаем количество боёв
-  for (const pool of pairs) {
-    for (const pair of pool) {
-      if (pair.length !== 2) continue;
-
-      const [fighter1, fighter2] = pair;
-
-      if (fighter1.name === "—" || fighter2.name === "—") continue;
-
-      totalScores.set(fighter1.id, (totalScores.get(fighter1.id) || 0) + fighter1.scores);
-      totalScores.set(fighter2.id, (totalScores.get(fighter2.id) || 0) + fighter2.scores);
-
-      fightsCount.set(fighter1.id, (fightsCount.get(fighter1.id) || 0) + 1);
-      fightsCount.set(fighter2.id, (fightsCount.get(fighter2.id) || 0) + 1);
-    }
-  }
-
-  // Теперь вычисляем SD как разницу между scores разных бойцов
-  // Но это не совсем правильно, так как scores накапливаются
-  // Правильнее было бы хранить результаты каждого боя
-
-  // Временное решение: возвращаем просто scores
-  return totalScores;
-}
-
-/**
- * Функция для тестирования - создаёт тестовые данные
- */
-export function createTestPairs(): ParticipantType[][][] {
-  const fighter1: ParticipantType = {
-    id: '1',
-    name: 'Иванов',
-    wins: 0,
-    scores: 0,
-    losses: 0,
-    draws: 0,
-    warnings: 0,
-    protests: 0,
-    doubleHits: 0,
-    opponents: [],
-    buchholz: 0
-  };
-
-  const fighter2: ParticipantType = {
-    id: '2',
-    name: 'Петров',
-    wins: 0,
-    scores: 0,
-    losses: 0,
-    draws: 0,
-    warnings: 0,
-    protests: 0,
-    doubleHits: 0,
-    opponents: [],
-    buchholz: 0
-  };
-
-  // Добавляем результаты после боя
-  (fighter1 as any).lastMatchScore = {
-    opponentId: '2',
-    myScore: 5,
-    opponentScore: 3
-  };
-
-  (fighter2 as any).lastMatchScore = {
-    opponentId: '1',
-    myScore: 3,
-    opponentScore: 5
-  };
-
-  // Обновляем scores
-  fighter1.scores = 5;
-  fighter2.scores = 3;
-
-  return [
-    [[fighter1, fighter2]]
-  ];
 }
 
 // --------------------------------------------------------------------
@@ -490,7 +309,7 @@ function convertPairsToMatches(
   pairs: ParticipantType[][][],
   tournamentId: string,
   round?: number,
-  results?: Map<string, { fighter1Score: number; fighter2Score: number }>
+  results?: Map<string, { fighter1Score: number; fighter2Score: number }>,
 ): MatchType[] {
   const matches: MatchType[] = [];
 
@@ -520,20 +339,23 @@ function convertPairsToMatches(
           wins: fighter1.wins,
           draws: fighter1.draws,
           losses: fighter1.losses,
-          scores: fighter1.scores
+          scores: fighter1.scores,
         },
         fighter2Stats: {
           wins: fighter2.wins,
           draws: fighter2.draws,
           losses: fighter2.losses,
-          scores: fighter2.scores
+          scores: fighter2.scores,
         },
         status: matchResult ? "completed" : "scheduled",
         winnerId: matchResult
-          ? (matchResult.fighter1Score > matchResult.fighter2Score ? fighter1.id :
-             matchResult.fighter2Score > matchResult.fighter1Score ? fighter2.id : null)
+          ? matchResult.fighter1Score > matchResult.fighter2Score
+            ? fighter1.id
+            : matchResult.fighter2Score > matchResult.fighter1Score
+              ? fighter2.id
+              : null
           : null,
-        round: round || 1
+        round: round || 1,
       };
 
       matches.push(match);
@@ -544,211 +366,371 @@ function convertPairsToMatches(
 }
 
 /**
- * Генерация уникального ID для матча
+ * Определяет 3 команды-победителя по круговой системе на основе всех критериев из правил
+ * @param poolDuels - массив дуэлей пула (каждый элемент - массив пар [ParticipantType, ParticipantType])
+ * @param teams - массив команд
+ * @returns массив из 3 команд-победителей (отсортированных по критериям)
  */
-function generateMatchId(
-  tournamentId: string,
-  matchIndex: number,
-  pairIndex: number,
-  round?: number
-): string {
-  const timestamp = Date.now();
-  const random = Math.random().toString(36).substring(2, 8);
-  return `match_${tournamentId}_r${round || 0}_p${matchIndex}_i${pairIndex}_${timestamp}_${random}`;
+export function getTriathlonWinnersFromDuels(
+  poolDuels: ParticipantType[][][],
+  teams: TeamType[],
+): TeamType[] {
+  // 1. Получаем статистику команд из дуэлей
+  const teamStats = getTeamStatsFromDuels(poolDuels, teams);
+
+  // 2. Сортируем по критериям из правил (п. 2.5.5)
+  const sortedStats = [...teamStats].sort((a, b) => {
+    // Критерий 1: Количество побед (больше → выше)
+    if (b.wins !== a.wins) return b.wins - a.wins;
+
+    // Критерий 2: Разница набранных/потерянных баллов (больше → выше)
+    const diffA = a.scoresFor - a.scoresAgainst;
+    const diffB = b.scoresFor - b.scoresAgainst;
+    if (diffB !== diffA) return diffB - diffA;
+
+    // Критерий 3: Результаты личной встречи
+    const headToHead = getHeadToHeadResult(
+      a.teamId,
+      b.teamId,
+      teams,
+      poolDuels,
+    );
+    if (headToHead !== 0) return headToHead;
+
+    // Критерий 4: Количество набранных баллов (больше → выше)
+    if (b.scoresFor !== a.scoresFor) return b.scoresFor - a.scoresFor;
+
+    // Если всё равно - по id
+    return a.teamId - b.teamId;
+  });
+
+  // 3. Берём топ-3 команды
+  const top3 = sortedStats.slice(0, 3);
+
+  // 4. Находим полные объекты команд
+  const winners: TeamType[] = top3.map((stat) => {
+    const team = teams.find((t) => t.id === stat.teamId);
+    if (!team) {
+      throw new Error(`Team with id ${stat.teamId} not found`);
+    }
+    return team;
+  });
+
+  return winners;
 }
 
 /**
- * Расширенная версия с дополнительной информацией
+ * Получает статистику команд из дуэлей
  */
-export function convertPairsToMatchesDetailed(
-  pairs: ParticipantType[][][],
-  tournamentId: string,
-  options?: {
-    round?: number;
-    startTime?: string;
-    location?: string;
-    judge?: string;
-  }
-): MatchType[] {
-  const matches: MatchType[] = [];
-  // const now = new Date().toISOString();
+export function getTeamStatsFromDuels(
+  poolDuels: (ParticipantType | ParticipantPlayoffType)[][][],
+  teams: (TeamType | TeamPlayOffType)[],
+): TeamStats[] {
+  const statsMap = new Map<number, TeamStats>();
 
-  pairs.forEach((pool, matchIndex) => {
-    pool.forEach((pair, pairIndex) => {
-      if (pair.length !== 2) return;
+  // Инициализируем все команды
+  teams.forEach((team) => {
+    statsMap.set(team.id, {
+      teamId: team.id,
+      wins: 0,
+      losses: 0,
+      draws: 0,
+      scoresFor: 0,
+      scoresAgainst: 0,
+      matchesCount: 0,
+    });
+  });
 
-      const [fighter1, fighter2] = pair;
+  poolDuels.forEach((matchPairs) => {
+    // Каждый matchPairs - это массив из 3 боёв (для триатлона)
+    // Или один бой (для обычного режима)
+    let team1Total = 0;
+    let team2Total = 0;
+    let team1Id: number | null = null;
+    let team2Id: number | null = null;
 
-      // Пропускаем —
-      if (fighter1.name === "—" || fighter2.name === "—") {
-        return;
+    matchPairs.forEach((pair) => {
+      const fencer1 = pair[0];
+      const fencer2 = pair[1];
+
+      // Находим команды по участникам
+      const team1 = findTeamByFencerId(fencer1.id, teams);
+      const team2 = findTeamByFencerId(fencer2.id, teams);
+
+      if (team1) {
+        team1Id = team1.id;
+        team1Total += fencer1.scores;
       }
 
-      // Проверяем, не встречались ли они уже (опционально)
-      // const havePlayedBefore = checkIfTheyPlayedBefore(fighter1, fighter2);
-
-      const match: MatchType = {
-        id: generateMatchId(tournamentId, matchIndex, pairIndex, options?.round),
-        tournamentId,
-        matchIndex,
-        pairIndex,
-
-        // Информация о бойцах
-        fighter1Id: fighter1.id,
-        fighter2Id: fighter2.id,
-        fighter1Name: fighter1.name,
-        fighter2Name: fighter2.name,
-
-        // Статистика бойцов на момент матча
-        fighter1Stats: {
-          wins: fighter1.wins,
-          draws: fighter1.draws,
-          losses: fighter1.losses,
-          scores: fighter1.scores
-        },
-        fighter2Stats: {
-          wins: fighter2.wins,
-          draws: fighter2.draws,
-          losses: fighter2.losses,
-          scores: fighter2.scores
-        },
-
-        // Результаты (пока пустые)
-        fighter1Score: 0,
-        fighter2Score: 0,
-        winnerId: null,
-
-        // Метаданные
-        round: options?.round || 1,
-        status: 'scheduled',
-        // havePlayedBefore,
-
-        // Время и место
-        // scheduledTime: options?.startTime,
-        // location: options?.location,
-        // judge: options?.judge,
-
-        // Таймстемпы
-        // createdAt: now,
-        // updatedAt: now
-      };
-
-      matches.push(match);
+      if (team2) {
+        team2Id = team2.id;
+        team2Total += fencer2.scores;
+      }
     });
+
+    if (team1Id !== null) {
+      const stats1 = statsMap.get(team1Id);
+
+      if (stats1) {
+        stats1.scoresFor += team1Total;
+        stats1.scoresAgainst += team2Total;
+        stats1.matchesCount += 1;
+
+        // Определяем победителя матча (по сумме очков за 3 боя)
+        if (team1Total > team2Total) {
+          stats1.wins += 1;
+        } else if (team2Total > team1Total) {
+          stats1.losses += 1;
+        } else {
+          stats1.draws += 1;
+        }
+      }
+    }
+
+    if (team2Id !== null) {
+      const stats2 = statsMap.get(team2Id);
+
+      if (stats2) {
+        stats2.scoresFor += team2Total;
+        stats2.scoresAgainst += team1Total;
+        stats2.matchesCount += 1;
+
+        if (team1Total > team2Total) {
+          stats2.losses += 1;
+        } else if (team2Total > team1Total) {
+          stats2.wins += 1;
+        } else {
+          stats2.draws += 1;
+        }
+      }
+    }
   });
 
-  return matches;
+  return Array.from(statsMap.values());
 }
 
 /**
- * Преобразование с группировкой по турам
+ * Получает результат личной встречи между двумя командами
+ * @returns 1 если team1 выиграла, -1 если team2 выиграла, 0 если ничья или не играли
  */
-export function convertPairsToMatchesByRound(
-  pairsByRound: ParticipantType[][][][], // [round][pool][pair]
-  tournamentId: string
-): MatchType[] {
-  const matches: MatchType[] = [];
+export function getHeadToHeadResult(
+  team1Id: number,
+  team2Id: number,
+  teams: TeamType[],
+  poolDuels: ParticipantType[][][],
+): number {
+  for (const matchPairs of poolDuels) {
+    let team1Total = 0;
+    let team2Total = 0;
+    let foundTeam1 = false;
+    let foundTeam2 = false;
 
-  pairsByRound.forEach((roundPairs, roundIndex) => {
-    const roundMatches = convertPairsToMatches(
-      roundPairs,
-      tournamentId,
-      roundIndex + 1
-    );
-    matches.push(...roundMatches);
-  });
+    for (const pair of matchPairs) {
+      const fencer1 = pair[0];
+      const fencer2 = pair[1];
 
-  return matches;
+      // Проверяем, участвуют ли эти команды в матче
+      const team1 = findTeamByFencerId(fencer1.id, teams);
+      const team2 = findTeamByFencerId(fencer2.id, teams);
+
+      if (team1 && team2) {
+        if (team1.id === team1Id) {
+          foundTeam1 = true;
+          team1Total += fencer1.scores;
+          team2Total += fencer2.scores;
+        } else if (team1.id === team2Id) {
+          foundTeam2 = true;
+          team1Total += fencer2.scores;
+          team2Total += fencer1.scores;
+        }
+      }
+    }
+
+    // Если нашли обе команды в этом матче
+    if (foundTeam1 && foundTeam2) {
+      if (team1Total > team2Total) return 1;
+      if (team2Total > team1Total) return -1;
+      return 0;
+    }
+  }
+
+  return 0;
 }
 
 /**
- * Обновление результатов матчей после завершения боёв
+ * Находит команду по id фехтовальщика
  */
-export function updateMatchResults(
-  matches: MatchType[],
-  results: Array<{
-    matchId: string;
-    fighter1Score: number;
-    fighter2Score: number;
-  }>
-): MatchType[] {
-  return matches.map(match => {
-    const result = results.find(r => r.matchId === match.id);
-    if (!result) return match;
+export function findTeamByFencerId(
+  fencerId: string,
+  teams: (TeamType | TeamPlayOffType)[],
+): TeamType | TeamPlayOffType | null {
+  for (const team of teams) {
+    const isTeamType = "deactive" in team;
+    const hasFencer = isTeamType
+      ? (team as TeamType).members.includes(fencerId)
+      : (team as TeamPlayOffType).members.some((m) => m.id === fencerId);
 
-    const { fighter1Score, fighter2Score } = result;
-    const winnerId = fighter1Score > fighter2Score ? match.fighter1Id :
-                     fighter2Score > fighter1Score ? match.fighter2Id : null;
+    if (hasFencer) return team;
+  }
+  return null;
+}
 
+/**
+ * Получает дополнительную статистику для отображения
+ */
+export function getTriathlonTeamStats(
+  poolDuels: (ParticipantType | ParticipantPlayoffType)[][][],
+  teams: (TeamType | TeamPlayOffType)[],
+): (Omit<TeamStats, "teamId"> & {
+  team: TeamType | TeamPlayOffType;
+  difference: number;
+})[] {
+  const stats = getTeamStatsFromDuels(poolDuels, teams);
+
+  return stats.map((stat) => {
+    const team = teams.find((t) => t.id === stat.teamId)!;
     return {
-      ...match,
-      fighter1Score,
-      fighter2Score,
-      winnerId,
-      status: 'completed',
-      updatedAt: new Date().toISOString()
+      team,
+      wins: stat.wins,
+      losses: stat.losses,
+      draws: stat.draws,
+      scoresFor: stat.scoresFor,
+      scoresAgainst: stat.scoresAgainst,
+      difference: stat.scoresFor - stat.scoresAgainst,
+      matchesCount: stat.matchesCount,
     };
   });
 }
 
 /**
- * Получение всех матчей для конкретного бойца
+ * Проверяет, все ли пары команд сыграны (на основе дуэлей)
+ * @param teams - массив команд
+ * @param poolDuels - массив дуэлей в пуле
+ * @returns true если все пары сыграны
  */
-export function getMatchesForFighter(
-  matches: MatchType[],
-  fighterId: string
-): MatchType[] {
-  return matches.filter(m =>
-    m.fighter1Id === fighterId || m.fighter2Id === fighterId
-  );
+export function isAllTeamsPairsPlayedFromDuels(
+  teams: TeamType[],
+  poolDuels: ParticipantType[][][],
+): boolean {
+  try {
+    // Фильтруем активные команды
+    const activeTeams = teams.filter((t) => !t.deactive);
+
+    if (activeTeams.length < 2) {
+      return true;
+    }
+
+    // Собираем все сыгранные пары из дуэлей
+    const playedPairs = new Set<string>();
+
+    poolDuels.forEach((matchPairs) => {
+      let team1Id: number | null = null;
+      let team2Id: number | null = null;
+
+      matchPairs.forEach((pair) => {
+        const fencer1 = pair[0];
+        const fencer2 = pair[1];
+
+        // Находим команды по участникам
+        const team1 = activeTeams.find((t) => t.members.includes(fencer1.id));
+        const team2 = activeTeams.find((t) => t.members.includes(fencer2.id));
+
+        if (team1 && team2) {
+          if (team1Id === null) team1Id = team1.id;
+          if (team2Id === null) team2Id = team2.id;
+        }
+      });
+
+      if (team1Id !== null && team2Id !== null) {
+        const pairKey = [team1Id, team2Id].sort((a, b) => a - b).join("-");
+        playedPairs.add(pairKey);
+      }
+    });
+
+    // Вычисляем общее количество возможных пар
+    const totalPossiblePairs =
+      (activeTeams.length * (activeTeams.length - 1)) / 2;
+
+    return playedPairs.size >= totalPossiblePairs;
+  } catch (e) {
+    return false;
+  }
+}
+
+// --------------------------------------------------------------------------
+
+/**
+ * Функция для распределения по аренам (используется перед началом турнира)
+ */
+export function assignInitialArenas(
+  participants: ParticipantType[],
+  arenaCount: number = 3,
+): ParticipantType[] {
+  const participantsPerArena = Math.ceil(participants.length / arenaCount);
+
+  return participants.map((p, index) => {
+    const arena = Math.min(
+      Math.floor(index / participantsPerArena),
+      arenaCount - 1,
+    );
+    return { ...p, arena };
+  });
 }
 
 /**
- * Получение статистики по матчам для бойца
+ * Получение рекомендуемого количества кругов для швейцарской системы
+ * на основе количества участников
  */
-export function getFighterMatchStats(
-  matches: MatchType[],
-  fighterId: string
-): {
-  totalMatches: number;
-  wins: number;
-  losses: number;
-  draws: number;
-  totalScored: number;
-  totalConceded: number;
-  rd: number;
-} {
-  const fighterMatches = getMatchesForFighter(matches, fighterId);
+export function getRecommendedRounds(totalParticipants: number): number {
+  // Таблица рекомендаций для швейцарской системы
+  if (totalParticipants <= 4) return 3;
+  if (totalParticipants <= 8) return 4;
+  if (totalParticipants <= 16) return 5;
+  if (totalParticipants <= 32) return 6;
+  if (totalParticipants <= 64) return 7;
+  if (totalParticipants <= 128) return 8;
+  if (totalParticipants <= 256) return 9;
+  return 10;
+}
 
-  let wins = 0;
-  let losses = 0;
-  let draws = 0;
-  let totalScored = 0;
-  let totalConceded = 0;
+/**
+ * Преобразует данные триатлона (пары команд) в пары участников
+ * @param triathlonData - данные триатлона в формате [TeamPlayOffType, TeamPlayOffType][][]
+ * @param maxFencersPerTeam - максимальное количество фехтовальщиков в команде (по умолчанию 3)
+ * @returns данные в формате [ParticipantType, ParticipantType][][]
+ */
+export function convertTriathlonToParticipantPairs(
+  triathlonData: [TeamPlayOffType, TeamPlayOffType][][],
+  maxFencersPerTeam: number = 3,
+): [ParticipantType, ParticipantType][][] {
+  if (!triathlonData || triathlonData.length === 0) {
+    return [];
+  }
 
-  fighterMatches.forEach(match => {
-    if (match.fighter1Id === fighterId) {
-      totalScored += match.fighter1Score;
-      totalConceded += match.fighter2Score;
-      if (match.winnerId === fighterId) wins++;
-      else if (match.winnerId === match.fighter2Id) losses++;
-      else if (match.winnerId === null) draws++;
-    } else {
-      totalScored += match.fighter2Score;
-      totalConceded += match.fighter1Score;
-      if (match.winnerId === fighterId) wins++;
-      else if (match.winnerId === match.fighter1Id) losses++;
-      else if (match.winnerId === null) draws++;
+  const result: [ParticipantType, ParticipantType][][] = [];
+
+  triathlonData.forEach((round) => {
+    const roundPairs: [ParticipantType, ParticipantType][] = [];
+
+    round.forEach(([team1, team2]) => {
+      if (!team1 || !team2 || !team1.members || !team2.members) {
+        return;
+      }
+
+      for (let i = 0; i < maxFencersPerTeam; i++) {
+        const fencer1 = team1.members[i];
+        const fencer2 = team2.members[i];
+
+        if (fencer1 && fencer2) {
+          roundPairs.push([{ ...fencer1 }, { ...fencer2 }]);
+        }
+      }
+    });
+
+    if (roundPairs.length > 0) {
+      result.push(roundPairs);
     }
   });
 
-  return {
-    totalMatches: fighterMatches.length,
-    wins,
-    losses,
-    draws,
-    totalScored,
-    totalConceded,
-    rd: totalScored - totalConceded
-  };
+  return result;
 }

@@ -22,45 +22,63 @@ import {
   currentPairIndexAtom,
   currentPoolIdAtom,
   currentPoolIndexAtom,
+  currentRoundAtom,
+  currentTeamsIndexesAtom,
   currentTournamentAtom,
   currentWeaponIdAtom,
   doubleHitsAtom,
   duelsAtom,
+  fighterDefault,
   fighterPairsAtom,
+  idsRDAtom,
   isGroupBattleAtom,
   isPoolEndAtom,
   isPoolRatingAtom,
+  participantsAtom,
   playoffAtom,
+  playoffTriathlonAtom,
   poolCountDeleteAtom,
   protests1Atom,
   protests2Atom,
+  rankParticipantsAtom,
   score1Atom,
   score2Atom,
+  teamsAtom,
+  totalRoundsAtom,
   tournamentSystemAtom,
   warnings1Atom,
   warnings2Atom,
 } from "@/store";
 import {
   ParticipantType,
+  TeamStats,
   TournamentResponse,
   TournamentSystem,
 } from "@/typings";
 import { processTournament, updatePoolEnd } from "@/utils/api";
 import { exportExcel } from "@/utils/exportExcel";
-import { generatePairs } from "@/utils/generatePairs";
-import { generatePlayoffPairs } from "@/utils/generatePlayoffPairs";
+import { generatePairs, getRandomTwoTeams } from "@/utils/generatePairs";
 import {
+  generatePlayoffPairs,
+  getPlayoffTriathlonTeamsPairs,
+} from "@/utils/generatePlayoffPairs";
+import {
+  changeValueInStateArray,
   createMatches,
   getMatchesFromDuels,
   isPoolEndByDuels,
+  teamSelect,
   truncate,
 } from "@/utils/helpers";
 import {
-  calculateAllSD,
+  calculateAllRD,
   getAllInOneParticipants,
+  getTeamStatsFromDuels,
   getTopThreeFighters,
+  getTriathlonWinnersFromDuels,
   getWinnersRobin,
   getWinnersSwiss,
+  isAllTeamsPairsPlayedFromDuels,
 } from "@/utils/matchesHandlers";
 import Toast from "react-native-toast-message";
 
@@ -69,6 +87,11 @@ const { width } = Dimensions.get("window");
 export default function TournamentGridScreen() {
   const { t } = useTranslation();
   const [isGroupBattle] = useAtom(isGroupBattleAtom);
+  const [teams, setTeams] = useAtom(teamsAtom);
+  const [currentTeamsIndexes, setCurrentTeamsIndexes] = useAtom(
+    currentTeamsIndexesAtom,
+  );
+  const [participants] = useAtom(participantsAtom);
   const [currentTournament] = useAtom(currentTournamentAtom);
   const [currentWeaponId] = useAtom(currentWeaponIdAtom);
   const [currentNominationId] = useAtom(currentNominationIdAtom);
@@ -89,15 +112,18 @@ export default function TournamentGridScreen() {
   const [score1, setScore1] = useAtom(score1Atom);
   const [score2, setScore2] = useAtom(score2Atom);
   const [playoff, setPlayoff] = useAtom(playoffAtom);
+  const [playoffTriathlon, setPlayoffTriathlon] = useAtom(playoffTriathlonAtom);
   const [isEnd, setIsEnd] = useAtom(isPoolEndAtom);
   const [showRank, setShowRank] = useState(false);
-  const [rank, setRank] = useState<ParticipantType[]>([]);
-  const [idsSD, setIdsSD] = useState<Map<string, number>>(
-    new Map<string, number>(),
-  );
+  const [triathlonStats, setTriathlonStats] = useState<TeamStats[]>();
+  const [rank, setRank] = useAtom(rankParticipantsAtom);
+  const [idsRD, setIdsRD] = useAtom(idsRDAtom);
+  const [currentRound, setCurrentRound] = useAtom(currentRoundAtom);
+  const [totalRounds] = useAtom(totalRoundsAtom);
   const [rating, setRating] = useState<TournamentResponse>();
   const [isRatingOpen, setIsRatingOpen] = useState(true);
   const [loading, setLoading] = useState(false);
+  const isEndAll = !isEnd.includes(false);
 
   const isRound =
     tournamentSystem === TournamentSystem.HYBRID ||
@@ -110,9 +136,19 @@ export default function TournamentGridScreen() {
     t("losses"),
     t("draw"),
     t("score"),
-    "SD",
+    "RD",
     tournamentSystem === TournamentSystem.SWISS ? t("buchholz") : "",
   ].filter(Boolean);
+
+  const headersTriathlonStats = [
+    "ID",
+    t("win"),
+    t("draw"),
+    t("score"),
+    t("losses"),
+    "RD",
+    t("matchesCount"),
+  ];
 
   const saveOnServer = async () => {
     if (currentTournament && currentNominationId && currentWeaponId) {
@@ -156,6 +192,15 @@ export default function TournamentGridScreen() {
     }
   };
 
+  const handlePlayoffPress = () => {
+    if (tournamentSystem === TournamentSystem.TRIATHLON) {
+      const pairs = getPlayoffTriathlonTeamsPairs(duels.flat(), teams.flat());
+      setPlayoffTriathlon([pairs]);
+    } else {
+      setPlayoff(generatePlayoffPairs(duels, poolCountDelete, isPoolRating));
+    }
+  };
+
   const endTournament = (endFightersBuchholz?: { [id: string]: number }) => {
     let winnersArr: ParticipantType[] = new Array(3);
     if (tournamentSystem === TournamentSystem.ROBIN) {
@@ -167,8 +212,8 @@ export default function TournamentGridScreen() {
       );
       setRank(ranking);
       winnersArr = winners;
-      setIdsSD(
-        calculateAllSD([
+      setIdsRD(
+        calculateAllRD([
           ...duels[currentPoolIndex],
           fighterPairs[currentPoolIndex],
         ]),
@@ -181,8 +226,8 @@ export default function TournamentGridScreen() {
       const { winners, ranking } = getWinnersSwiss(all);
       setRank(ranking);
       winnersArr = winners;
-      setIdsSD(
-        calculateAllSD([
+      setIdsRD(
+        calculateAllRD([
           ...duels[currentPoolIndex],
           fighterPairs[currentPoolIndex],
         ]),
@@ -194,107 +239,173 @@ export default function TournamentGridScreen() {
       ]);
     }
 
-    setFighterPairs((state) => {
-      const buf = JSON.parse(JSON.stringify(state));
-      buf[currentPoolIndex] = [];
-      return buf;
-    });
+    setFighterPairs((state) =>
+      changeValueInStateArray(state, [], currentPoolIndex),
+    );
     setWinners(winnersArr);
-    setIsEnd((state) => {
-      const buf = [...state];
-      buf[currentPoolIndex] = true;
-      return buf;
-    });
+    setIsEnd((state) => changeValueInStateArray(state, true, currentPoolIndex));
   };
 
   const genPairs = async () => {
-    const newFighters = !isRound
-      ? (fighterPairs[currentPoolIndex]
-          .map((pair) => {
-            if (pair[0]?.name === "—") {
-              return pair[1];
-            } else if (pair[1]?.name === "—") {
-              return pair[0];
-            } else {
-              return pair[0].wins > pair[1].wins
-                ? { ...pair[0], wins: 0, scores: 0 }
-                : { ...pair[1], wins: 0, scores: 0 };
-            }
-          })
-          .filter(Boolean) as ParticipantType[])
-      : fighterPairs[currentPoolIndex]
-          .map((pair) => {
-            if (tournamentSystem === TournamentSystem.SWISS) {
-              const calculateBuchholz = (idx: number) => {
-                const allFighters = getAllInOneParticipants([
-                  fighterPairs[currentPoolIndex],
-                  ...duels[currentPoolIndex],
-                ]);
-                if (allFighters.length) {
-                  return pair[idx].opponents.reduce((sum, opId) => {
-                    const opponent = allFighters.find(
-                      (fighter) => fighter.id === opId,
-                    );
-                    return sum + (opponent?.wins || 0);
-                  }, 0);
-                }
-                return 0;
-              };
+    if (tournamentSystem !== TournamentSystem.TRIATHLON) {
+      const newFighters = !isRound
+        ? (fighterPairs[currentPoolIndex]
+            .map((pair) => {
+              if (pair[0]?.name === "—") {
+                return pair[1];
+              } else if (pair[1]?.name === "—") {
+                return pair[0];
+              } else {
+                return pair[0].wins > pair[1].wins
+                  ? { ...pair[0], wins: 0, scores: 0 }
+                  : { ...pair[1], wins: 0, scores: 0 };
+              }
+            })
+            .filter(Boolean) as ParticipantType[])
+        : fighterPairs[currentPoolIndex]
+            .map((pair) => {
+              if (tournamentSystem === TournamentSystem.SWISS) {
+                const calculateBuchholz = (idx: number) => {
+                  const allFighters = getAllInOneParticipants([
+                    fighterPairs[currentPoolIndex],
+                    ...duels[currentPoolIndex],
+                  ]);
+                  if (allFighters.length) {
+                    return pair[idx].opponents.reduce((sum, opId) => {
+                      const opponent = allFighters.find(
+                        (fighter) => fighter.id === opId,
+                      );
+                      return sum + (opponent?.wins || 0);
+                    }, 0);
+                  }
+                  return 0;
+                };
+                return [
+                  {
+                    ...pair[0],
+                    wins: 0,
+                    scores: 0,
+                    buchholz: calculateBuchholz(0),
+                  },
+                  {
+                    ...pair[1],
+                    wins: 0,
+                    scores: 0,
+                    buchholz: calculateBuchholz(1),
+                  },
+                ];
+              }
               return [
-                {
-                  ...pair[0],
-                  wins: 0,
-                  scores: 0,
-                  buchholz: calculateBuchholz(0),
-                },
-                {
-                  ...pair[1],
-                  wins: 0,
-                  scores: 0,
-                  buchholz: calculateBuchholz(1),
-                },
+                { ...pair[0], wins: 0, scores: 0 },
+                { ...pair[1], wins: 0, scores: 0 },
               ];
-            }
-            return [
-              { ...pair[0], wins: 0, scores: 0 },
-              { ...pair[1], wins: 0, scores: 0 },
-            ];
-          })
-          .flat();
+            })
+            .flat();
 
-    setDuels((prev) => {
-      const buf = JSON.parse(JSON.stringify(prev));
-      buf[currentPoolIndex].push(fighterPairs[currentPoolIndex]);
-      return buf;
-    });
+      setDuels((prev) => {
+        const buf = JSON.parse(JSON.stringify(prev));
+        buf[currentPoolIndex].push(fighterPairs[currentPoolIndex]);
+        return buf;
+      });
 
-    if (newFighters.length > 1) {
-      const newPairs = generatePairs(
-        newFighters,
-        tournamentSystem,
-        currentPoolIndex,
-        setFighterPairs,
-        setCurrentPairIndex,
-      );
-      if (isRound) {
-        const pairs = newPairs[currentPoolIndex].flat();
-        if (
-          pairs.filter((pair) => pair.name === "—").length ===
-          pairs.filter((pair) => pair.name !== "—").length
-        ) {
-          endTournament(
-            newFighters.reduce(
-              (acc, user) => {
-                acc[user.id] = user.buchholz;
-                return acc;
-              },
-              {} as { [id: string]: number },
-            ),
-          );
+      if (newFighters.length > 1) {
+        const newPairs = generatePairs(
+          newFighters,
+          tournamentSystem,
+          currentPoolIndex,
+          setFighterPairs,
+          setCurrentPairIndex,
+          currentRound[currentPoolIndex],
+          totalRounds[currentPoolIndex],
+        );
+
+        if (tournamentSystem === TournamentSystem.SWISS)
+          setCurrentRound((state) => {
+            const buf = [...state];
+            buf[currentPoolIndex] += 1;
+            return buf;
+          });
+
+        if (isRound) {
+          const pairs = newPairs[currentPoolIndex].flat();
+          if (
+            pairs.filter((pair) => pair.name === "—").length ===
+            pairs.filter((pair) => pair.name !== "—").length
+          ) {
+            endTournament(
+              newFighters.reduce(
+                (acc, user) => {
+                  acc[user.id] = user.buchholz;
+                  return acc;
+                },
+                {} as { [id: string]: number },
+              ),
+            );
+          }
         }
+      } else {
+        endTournament();
       }
     } else {
-      endTournament();
+      let copyDuels: [ParticipantType, ParticipantType][][][] = [];
+      setDuels((prev) => {
+        const buf = JSON.parse(JSON.stringify(prev));
+        buf[currentPoolIndex].push([...fighterPairs[currentPoolIndex]]);
+        copyDuels = JSON.parse(JSON.stringify(buf));
+        return buf;
+      });
+      const twoTeams = getRandomTwoTeams(
+        teams[currentPoolIndex],
+        copyDuels[currentPoolIndex],
+      );
+      if (!twoTeams && teams.flat().length >= 7) {
+        const pairsTeamsIds = getPlayoffTriathlonTeamsPairs(
+          copyDuels[currentPoolIndex],
+          teams[currentPoolIndex],
+        );
+        const allPlayoffTeamsIds = pairsTeamsIds
+          .map((pair) => [pair[0].id, pair[1].id])
+          .flat();
+        setTeams((state) => {
+          const buf = [...state];
+          buf[currentPoolIndex] = buf[currentPoolIndex].map((s) => ({
+            ...s,
+            deactive: !allPlayoffTeamsIds.includes(s.id),
+          }));
+          return buf;
+        });
+      } else if (!twoTeams && teams.flat().length < 7) {
+        const winners = getTriathlonWinnersFromDuels(
+          copyDuels[currentPoolIndex],
+          teams[currentPoolIndex],
+        );
+        const stats = getTeamStatsFromDuels(
+          copyDuels[currentPoolIndex],
+          teams[currentPoolIndex],
+        );
+
+        setTriathlonStats(stats);
+        setWinners(winners.map((w) => ({ ...fighterDefault, name: w.name })));
+      } else if (twoTeams) {
+        const handleTeamSelect = teamSelect(
+          teams[currentPoolIndex],
+          currentTeamsIndexes[currentPoolIndex],
+          participants,
+          currentPoolIndex,
+          setCurrentTeamsIndexes,
+          setFighterPairs,
+        );
+        handleTeamSelect(twoTeams[0].id, "red", undefined, twoTeams[1].id);
+      }
+
+      if (!twoTeams) {
+        setFighterPairs((state) =>
+          changeValueInStateArray(state, [], currentPoolIndex),
+        );
+        setIsEnd((state) =>
+          changeValueInStateArray(state, true, currentPoolIndex),
+        );
+      }
     }
 
     if (!isGroupBattle) {
@@ -305,6 +416,9 @@ export default function TournamentGridScreen() {
       setWarnings2(0);
       setScore1(0);
       setScore2(0);
+      setCurrentPairIndex((state) =>
+        changeValueInStateArray(state, 0, currentPoolIndex),
+      );
     }
   };
 
@@ -313,6 +427,8 @@ export default function TournamentGridScreen() {
       idRed: f1.id,
       nameRed: truncate(f1?.name || "", 20),
       scoreRed: f1.scores,
+      hintRed: f1.weapon,
+      hintBlue: f2.weapon,
       scoreBlue: f2.scores,
       nameBlue: truncate(f2?.name || "", 20),
       idBlue: f2.id,
@@ -328,7 +444,7 @@ export default function TournamentGridScreen() {
           f.losses.toString(),
           f.draws.toString(),
           f.scores.toString(),
-          idsSD.get(f.id)?.toString() || "",
+          idsRD.get(f.id)?.toString() || "",
           tournamentSystem === TournamentSystem.SWISS
             ? f.buchholz.toString()
             : "",
@@ -337,7 +453,29 @@ export default function TournamentGridScreen() {
     };
   };
 
-  const isPoolInProgress = !isPoolEndByDuels(duels, currentPoolIndex);
+  const getTriathlonDataRankTable = (data: TeamStats[]) => {
+    return {
+      data: data
+        .map((stat) => [
+          stat.teamId.toString(),
+          stat.wins.toString(),
+          stat.draws.toString(),
+          stat.scoresFor.toString(),
+          stat.scoresAgainst.toString(),
+          String(stat.scoresFor - stat.scoresAgainst),
+          stat.matchesCount.toString(),
+        ])
+        .filter((row) => row.some((cell) => cell !== "")),
+    };
+  };
+
+  const isPoolInProgress =
+    tournamentSystem === TournamentSystem.TRIATHLON
+      ? !isAllTeamsPairsPlayedFromDuels(
+          teams[currentPoolIndex],
+          duels[currentPoolIndex],
+        )
+      : !isPoolEndByDuels(duels, currentPoolIndex);
   const sections = [
     ...(isPoolInProgress &&
     fighterPairs[currentPoolIndex]?.filter((p) => p.length).length
@@ -356,10 +494,10 @@ export default function TournamentGridScreen() {
     })),
   ];
 
-  const isEndAll = !isEnd.includes(false);
-
-  if (playoff.length) {
-    return <Playoff />;
+  if (playoff.length || playoffTriathlon.length) {
+    return (
+      <Playoff isTriathlon={tournamentSystem === TournamentSystem.TRIATHLON} />
+    );
   }
 
   return (
@@ -369,17 +507,16 @@ export default function TournamentGridScreen() {
       contentContainerStyle={styles.contentContainer}
     >
       {/* Кнопка плей-офф */}
-      {isEndAll && tournamentSystem === TournamentSystem.HYBRID && (
-        <Button
-          title={t("playoff")}
-          onPress={() =>
-            setPlayoff(
-              generatePlayoffPairs(duels, poolCountDelete, isPoolRating),
-            )
-          }
-          style={styles.fullButton}
-        />
-      )}
+      {isEndAll &&
+        (tournamentSystem === TournamentSystem.HYBRID ||
+          (tournamentSystem === TournamentSystem.TRIATHLON &&
+            teams.flat().length >= 7)) && (
+          <Button
+            title={t("playoff")}
+            onPress={handlePlayoffPress}
+            style={styles.fullButton}
+          />
+        )}
 
       {/* Победители */}
       {!!winners.length &&
@@ -467,6 +604,10 @@ export default function TournamentGridScreen() {
           exportExcel(
             duels[currentPoolIndex],
             `${t("pool")} ${currentPoolIndex + 1}.xlsx`,
+            undefined,
+            tournamentSystem === TournamentSystem.TRIATHLON
+              ? teams[currentPoolIndex]
+              : undefined,
           )
         }
         disabled={!duels[currentPoolIndex]?.length}
@@ -492,12 +633,17 @@ export default function TournamentGridScreen() {
 
       {/* Модальное окно с рангом */}
       <ModalWindow isOpen={showRank} onClose={() => setShowRank(false)}>
-        <View style={styles.modalContent}>
-          {(() => {
-            const content = getDataRankTable(rank);
-            return <Table data={content.data} titles={headersRank} />;
-          })()}
-        </View>
+        {(() => {
+          const content = triathlonStats
+            ? getTriathlonDataRankTable(triathlonStats)
+            : getDataRankTable(rank);
+          return (
+            <Table
+              data={content.data}
+              titles={triathlonStats ? headersTriathlonStats : headersRank}
+            />
+          );
+        })()}
       </ModalWindow>
 
       {/* Модальное окно с рейтингом */}
@@ -557,6 +703,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 30,
     marginBottom: 24,
+    marginTop: 10,
     position: "relative",
   },
   winnerCard: {
@@ -618,6 +765,5 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     width: width - 64,
-    maxHeight: "80%",
   },
 });

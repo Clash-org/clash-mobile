@@ -1,16 +1,18 @@
 import { Colors, Fonts } from "@/constants";
+import { useDrawer } from "@/providers/SidebarProvider";
 import { X } from "lucide-react-native";
-import React from "react";
+import React, { useEffect } from "react";
 import {
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-    ViewStyle,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
+  ViewStyle,
 } from "react-native";
 
 interface ModalWindowProps {
@@ -24,6 +26,7 @@ interface ModalWindowProps {
   showCloseButton?: boolean;
   title?: string;
   fullScreen?: boolean;
+  noScroll?: boolean;
 }
 
 const ModalWindow: React.FC<ModalWindowProps> = ({
@@ -34,10 +37,16 @@ const ModalWindow: React.FC<ModalWindowProps> = ({
   hidden = false,
   animationType = "fade",
   closeOnBackdropPress = true,
-  showCloseButton = true,
+  showCloseButton = false,
   title,
   fullScreen = false,
+  noScroll = false,
 }) => {
+  const { setModalOpen } = useDrawer();
+  useEffect(() => {
+    setModalOpen(isOpen);
+  }, [isOpen, setModalOpen]);
+
   if (!isOpen && !hidden) {
     return null;
   }
@@ -60,53 +69,50 @@ const ModalWindow: React.FC<ModalWindowProps> = ({
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardAvoidingView}
       >
-        <TouchableOpacity
-          style={styles.backdrop}
-          activeOpacity={1}
-          onPress={handleBackdropPress}
+        {/* Используем TouchableWithoutFeedback для бэкдропа */}
+        <TouchableWithoutFeedback onPress={handleBackdropPress}>
+          <View style={styles.backdrop} />
+        </TouchableWithoutFeedback>
+        <View
+          style={[
+            styles.modalWrapper,
+            fullScreen && styles.modalWrapperFullScreen,
+          ]}
         >
-          <TouchableOpacity
-            activeOpacity={1}
-            style={[
-              styles.modalWrapper,
-              fullScreen && styles.modalWrapperFullScreen,
-            ]}
+          <View
+            style={[styles.modal, fullScreen && styles.modalFullScreen, style]}
           >
-            <View
-              style={[
-                styles.modal,
-                fullScreen && styles.modalFullScreen,
-                style,
-              ]}
-            >
-              {/* Close button */}
-              {showCloseButton && (
-                <TouchableOpacity
-                  onPress={onClose}
-                  style={styles.closeBtn}
-                  accessibilityLabel="Close modal"
-                >
-                  <X size={24} color={Colors.fg} />
-                </TouchableOpacity>
-              )}
+            {/* Close button */}
+            {showCloseButton && (
+              <TouchableOpacity
+                onPress={onClose}
+                style={styles.closeBtn}
+                accessibilityLabel="Close modal"
+                activeOpacity={0.7}
+              >
+                <X size={24} color={Colors.fg} />
+              </TouchableOpacity>
+            )}
 
-              {/* Title */}
-              {title && (
-                <View style={styles.titleContainer}>
-                  <Text style={styles.title}>{title}</Text>
-                </View>
-              )}
+            {/* Title */}
+            {title && (
+              <View style={styles.titleContainer}>
+                <Text style={styles.title}>{title}</Text>
+              </View>
+            )}
 
-              {/* Content */}
+            {/* Content */}
+            {!noScroll && (
               <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.contentContainer}
               >
                 {children}
               </ScrollView>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
+            )}
+            {noScroll && children}
+          </View>
+        </View>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -117,7 +123,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   backdrop: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0, 0, 0, 0.6)",
     ...Platform.select({
       web: {
@@ -126,7 +132,7 @@ const styles = StyleSheet.create({
     }),
   },
   modalWrapper: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
     padding: 16,

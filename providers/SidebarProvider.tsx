@@ -20,6 +20,7 @@ interface DrawerContextType {
   openDrawer: () => void;
   closeDrawer: () => void;
   isDrawerOpen: boolean;
+  setModalOpen: (isOpen: boolean) => void;
 }
 
 const DrawerContext = createContext<DrawerContextType | undefined>(undefined);
@@ -44,8 +45,13 @@ export function SidebarProvider({
   const insets = useSafeAreaInsets();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
+  const isModalOpenRef = useRef(false);
   const translateX = useRef(new Animated.Value(-screenWidth)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
+
+  const setModalOpen = (isOpen: boolean) => {
+    isModalOpenRef.current = isOpen;
+  };
 
   const openDrawer = () => {
     if (isDrawerOpen || isAnimating) return;
@@ -94,16 +100,21 @@ export function SidebarProvider({
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gestureState) => {
+        if (isModalOpenRef.current) {
+          return false;
+        }
         const { dx, dy } = gestureState;
         // Активируем только горизонтальный свайп, не во время анимации
         return !isAnimating && Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10;
       },
       onPanResponderGrant: () => {
+        if (isModalOpenRef.current) return;
         // Останавливаем текущую анимацию при начале свайпа
         translateX.stopAnimation();
         overlayOpacity.stopAnimation();
       },
       onPanResponderMove: (_, gestureState) => {
+        if (isModalOpenRef.current) return;
         const { dx } = gestureState;
         let newX;
 
@@ -126,6 +137,7 @@ export function SidebarProvider({
         }
       },
       onPanResponderRelease: (_, gestureState) => {
+        if (isModalOpenRef.current) return;
         const { dx, vx } = gestureState;
 
         if (!isDrawerOpen) {
@@ -174,7 +186,9 @@ export function SidebarProvider({
   ).current;
 
   return (
-    <DrawerContext.Provider value={{ openDrawer, closeDrawer, isDrawerOpen }}>
+    <DrawerContext.Provider
+      value={{ openDrawer, closeDrawer, isDrawerOpen, setModalOpen }}
+    >
       <View style={{ flex: 1 }} {...panResponder.panHandlers}>
         {children}
 

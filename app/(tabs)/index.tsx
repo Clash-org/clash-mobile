@@ -12,16 +12,15 @@ import {
   Pause,
   Play,
   Plus,
-  RefreshCw,
   Save,
   Trash2,
+  UserRound,
   X,
 } from "lucide-react-native";
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   FlatList,
-  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -49,10 +48,20 @@ import {
 } from "@/hooks/useTournaments";
 import { createPool, getMathes, updatePool } from "@/utils/api";
 import { generatePairs } from "@/utils/generatePairs";
-import { generateId, getName, isPoolEndByDuels } from "@/utils/helpers";
+import {
+  changeValueInStateArray,
+  filterState,
+  generateId,
+  getName,
+  isPoolEndByDuels,
+} from "@/utils/helpers";
 import { importExcel } from "@/utils/importExcel";
 
 // Атомы
+import { TriathlonTeamManager } from "@/components/TriathlonTeamManager";
+import { TriathlonWeaponsSettings } from "@/components/TriathlonWeaponsSettings";
+import { GenderSwitch } from "@/components/ui/GenderSwitch";
+import ModalWindow from "@/components/ui/ModalWindow";
 import SelectPair from "@/components/ui/SelectPair";
 import { Colors, Fonts, langLabels } from "@/constants";
 import useBellSound from "@/hooks/useBellSound";
@@ -63,6 +72,7 @@ import {
   currentPairIndexAtom,
   currentPoolIdAtom,
   currentPoolIndexAtom,
+  currentRoundAtom,
   currentTournamentAtom,
   currentWeaponIdAtom,
   doubleHitsAtom,
@@ -90,12 +100,15 @@ import {
   protests2Atom,
   score1Atom,
   score2Atom,
+  teamsAtom,
+  totalRoundsAtom,
   tournamentSystemAtom,
   userAtom,
   warnings1Atom,
   warnings2Atom,
 } from "@/store";
 import {
+  Gender,
   NominationType,
   NominationUser,
   ParticipantStatus,
@@ -105,6 +118,10 @@ import {
   TournamentStatus,
   TournamentSystem,
 } from "@/typings";
+import {
+  assignInitialArenas,
+  getRecommendedRounds,
+} from "@/utils/matchesHandlers";
 import { ethers } from "ethers";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Toast from "react-native-toast-message";
@@ -114,7 +131,6 @@ type PoolControllersProps = {
   onDelete: () => void;
   onImport: () => void;
   isEnd: boolean;
-  poolIndex: number;
   isFirstPool: boolean;
 };
 
@@ -122,7 +138,6 @@ function PoolControllers({
   onDelete,
   onImport,
   isEnd,
-  poolIndex,
   isFirstPool,
 }: PoolControllersProps) {
   return (
@@ -191,41 +206,28 @@ function PoolDetailModal({
   const { t } = useTranslation();
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={onClose}
+    <ModalWindow
+      isOpen={visible}
+      onClose={onClose}
+      title={`${t("pool")} ${poolIndex + 1}`}
+      showCloseButton={true}
+      fullScreen={false}
     >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>
-              {t("pool")} {poolIndex + 1}
-            </Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <X size={24} color={Colors.fg} />
-            </TouchableOpacity>
-          </View>
+      <PoolControllers
+        onDelete={onDelete}
+        onImport={onImport}
+        isEnd={isEnd}
+        isFirstPool={poolIndex === 0}
+      />
 
-          <PoolControllers
-            onDelete={onDelete}
-            onImport={onImport}
-            isEnd={isEnd}
-            poolIndex={poolIndex}
-            isFirstPool={poolIndex === 0}
-          />
-
-          <ScrollView style={styles.modalBody}>
-            <PoolContent
-              pairs={pairs}
-              nominationId={nominationId}
-              nominations={nominations}
-            />
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <PoolContent
+          pairs={pairs}
+          nominationId={nominationId}
+          nominations={nominations}
+        />
+      </ScrollView>
+    </ModalWindow>
   );
 }
 
@@ -237,6 +239,7 @@ export default function SettingsScreen() {
 
   /* ---------- атомы ---------- */
   const [user] = useAtom(userAtom);
+  const [teams] = useAtom(teamsAtom);
   const [isGroupBattle, setIsGroupBattle] = useAtom(isGroupBattleAtom);
   const [isReverseSides, setIsReverseSides] = useAtom(isReverseSidesAtom);
   const [isSaveParticipantsForPools, setIsSaveParticipantsForPools] = useAtom(
@@ -272,6 +275,8 @@ export default function SettingsScreen() {
   );
   const [weaponId, setWeaponId] = useAtom(currentWeaponIdAtom);
   const [nominationId, setNominationId] = useAtom(currentNominationIdAtom);
+  const [, setCurrentRound] = useAtom(currentRoundAtom);
+  const [totalRounds, setTotalRounds] = useAtom(totalRoundsAtom);
 
   /* ---------- хуки ---------- */
   const { tournaments } = useOrganizerTournaments(user?.id, language);
@@ -287,6 +292,7 @@ export default function SettingsScreen() {
   const { nominations } = useNominations(language);
 
   /* ---------- состояние ---------- */
+  const [gender, setGender] = useState(Gender.MALE);
   const [currentTournamentParticipants, setCurrentTournamentParticipants] =
     useState<NominationUser[]>([]);
   const [currentModeratorId, setCurrentModeratorId] = useState("");
@@ -300,10 +306,11 @@ export default function SettingsScreen() {
   const [isDragging, setIsDragging] = useState(false);
 
   const systems = [
-    { label: t("hybridSystem"), value: TournamentSystem.HYBRID.toString() },
-    { label: t("olympicSystem"), value: TournamentSystem.OLYMPIC.toString() },
-    { label: t("roundRobin"), value: TournamentSystem.ROBIN.toString() },
-    { label: t("swissSystem"), value: TournamentSystem.SWISS.toString() },
+    { label: t("hybridSystem"), value: TournamentSystem.HYBRID },
+    { label: t("olympicSystem"), value: TournamentSystem.OLYMPIC },
+    { label: t("roundRobin"), value: TournamentSystem.ROBIN },
+    { label: t("swissSystem"), value: TournamentSystem.SWISS },
+    { label: t("triathlonSystem"), value: TournamentSystem.TRIATHLON },
   ];
 
   const hitZonesKeys = {
@@ -513,11 +520,13 @@ export default function SettingsScreen() {
 
   /* ---------- управление пулами ---------- */
   const deletePool = (poolIndex: number) => {
-    setFighterPairs((state) => state.filter((_, index) => index !== poolIndex));
-    setPools((state) => state.filter((_, index) => index !== poolIndex));
+    setFighterPairs((state) => filterState(state, poolIndex));
+    setPools((state) => filterState(state, poolIndex));
     setCurrentPoolIndex((state) => (poolIndex <= state ? state - 1 : state));
-    setParticipants((state) => state.filter((_, index) => index !== poolIndex));
-    setIsPoolEnd((state) => state.filter((_, idx) => idx !== poolIndex));
+    setParticipants((state) => filterState(state, poolIndex));
+    setIsPoolEnd((state) => filterState(state, poolIndex));
+    setCurrentRound((state) => filterState(state, poolIndex));
+    setTotalRounds((state) => filterState(state, poolIndex));
     setSelectedPoolModal(null);
   };
 
@@ -650,11 +659,12 @@ export default function SettingsScreen() {
       if (!buf[currentPoolIndex]) buf[currentPoolIndex] = [];
       buf[currentPoolIndex] = [
         ...buf[currentPoolIndex],
-        { ...fighterDefault, name, id: id || generateId(name) },
+        { ...fighterDefault, name, id: id || generateId(name), gender },
       ];
       return buf;
     });
     setNewName("");
+    setGender(Gender.MALE);
   };
 
   const removeParticipant = (id: string) => {
@@ -681,16 +691,17 @@ export default function SettingsScreen() {
         return buf;
       });
     }
-    setIsPoolEnd((state) => {
-      const buf = [...state];
-      buf[currentPoolIndex] = false;
-      return buf;
-    });
-    setCurrentPairIndex((state) => {
-      const buf = [...state];
-      buf[currentPoolIndex] = 0;
-      return buf;
-    });
+    setIsPoolEnd((state) =>
+      changeValueInStateArray(state, false, currentPoolIndex),
+    );
+    setCurrentPairIndex((state) =>
+      changeValueInStateArray(state, 0, currentPoolIndex),
+    );
+
+    setCurrentRound((state) =>
+      changeValueInStateArray(state, 1, currentPoolIndex),
+    );
+
     setScore1(0);
     setScore2(0);
     setDoubleHits(0);
@@ -744,7 +755,7 @@ export default function SettingsScreen() {
             return b;
           });
           return buf;
-        } catch (e) {
+        } catch {
           return state;
         }
       });
@@ -763,12 +774,29 @@ export default function SettingsScreen() {
     }
 
     addPeopleWrap(() => {
+      if (tournamentSystem === TournamentSystem.SWISS) {
+        newParticipants[currentPoolIndex] = assignInitialArenas(
+          newParticipants[currentPoolIndex],
+        );
+        setTotalRounds((state) =>
+          changeValueInStateArray(
+            state,
+            getRecommendedRounds(newParticipants[currentPoolIndex].length),
+            currentPoolIndex,
+          ),
+        );
+      }
+
       const pairs = generatePairs(
         newParticipants[currentPoolIndex],
         tournamentSystem,
         currentPoolIndex,
         setFighterPairs,
         setCurrentPairIndex,
+        Number(tournamentSystem === TournamentSystem.SWISS),
+        tournamentSystem === TournamentSystem.SWISS
+          ? getRecommendedRounds(newParticipants[currentPoolIndex].length)
+          : undefined,
       );
       setPools((state) => {
         const buf = [...state];
@@ -863,11 +891,9 @@ export default function SettingsScreen() {
   };
 
   const selectPair = (idx: number) => {
-    setCurrentPairIndex((state) => {
-      const buf = [...state];
-      buf[currentPoolIndex] = idx;
-      return buf;
-    });
+    setCurrentPairIndex((state) =>
+      changeValueInStateArray(state, idx, currentPoolIndex),
+    );
   };
 
   const isSimpleMode =
@@ -886,6 +912,28 @@ export default function SettingsScreen() {
 
     return { hours, minutes, seconds };
   };
+
+  const addPool = (isAddPoolIndex = true) => {
+    if (currentPoolIndex + 1 === fighterPairs.length) {
+      if (isSaveParticipantsForPools) {
+        setParticipants([...participants, [...participants[currentPoolIndex]]]);
+      } else {
+        setParticipants([...participants, []]);
+      }
+      setFighterPairs([...fighterPairs, ...pairsDefault]);
+      setPools([...pools, ...pairsDefault]);
+      setCurrentPairIndex([...currentPairIndex, 0]);
+      setDuels([...duels, []]);
+      setIsPoolEnd([...isPoolEnd, false]);
+      setCurrentRound((state) => [...state, 1]);
+      setTotalRounds((state) => [...state, 0]);
+    }
+    if (isAddPoolIndex) setCurrentPoolIndex(currentPoolIndex + 1);
+  };
+
+  const isArrowNext =
+    tournamentSystem === TournamentSystem.TRIATHLON &&
+    teams.length - 1 === currentPoolIndex;
 
   useEffect(() => {
     if (isBellPlaying) {
@@ -990,7 +1038,7 @@ export default function SettingsScreen() {
             data={pools}
             horizontal
             showsHorizontalScrollIndicator={false}
-            renderItem={({ item, index }) => (
+            renderItem={({ index }) => (
               <TouchableOpacity
                 style={[
                   styles.poolCard,
@@ -1004,7 +1052,12 @@ export default function SettingsScreen() {
                 </Text>
                 {isPoolEnd[index] && <CheckCircle size={20} color="#4CAF50" />}
                 <Text style={styles.poolCardCount}>
-                  {fighterPairs[index]?.length || 0} {t("pairs")}
+                  {(tournamentSystem === TournamentSystem.TRIATHLON
+                    ? teams[index]?.length
+                    : fighterPairs[index]?.length) || 0}{" "}
+                  {tournamentSystem === TournamentSystem.TRIATHLON
+                    ? t("teams")
+                    : t("pairs")}
                 </Text>
               </TouchableOpacity>
             )}
@@ -1048,19 +1101,50 @@ export default function SettingsScreen() {
             </TouchableOpacity>
           </View>
 
-          {isSimpleMode && (
-            <FlatList
-              data={participants[currentPoolIndex] || []}
-              renderItem={({ item }) => (
-                <View style={styles.participantRow}>
-                  <Text style={styles.participantName}>{item.name}</Text>
-                  <TouchableOpacity onPress={() => removeParticipant(item.id)}>
-                    <Trash2 size={20} color={Colors.fg} />
-                  </TouchableOpacity>
-                </View>
-              )}
-              keyExtractor={(item) => item.id}
+          {tournamentSystem === TournamentSystem.TRIATHLON && (
+            <GenderSwitch
+              gender={gender}
+              setGender={setGender}
+              style={{ marginTop: -10, marginBottom: 10 }}
             />
+          )}
+
+          {isSimpleMode && (
+            <>
+              <View
+                style={{
+                  ...styles.row,
+                  justifyContent: "center",
+                  gap: 5,
+                  marginVertical: -10,
+                }}
+              >
+                <UserRound color={Colors.fg} />
+                <Text
+                  style={{
+                    alignContent: "center",
+                    color: Colors.fg,
+                    fontSize: 16,
+                  }}
+                >
+                  {participants[currentPoolIndex].length}
+                </Text>
+              </View>
+              <FlatList
+                data={participants[currentPoolIndex] || []}
+                renderItem={({ item }) => (
+                  <View style={styles.participantRow}>
+                    <Text style={styles.participantName}>{item.name}</Text>
+                    <TouchableOpacity
+                      onPress={() => removeParticipant(item.id)}
+                    >
+                      <Trash2 size={20} color={Colors.fg} />
+                    </TouchableOpacity>
+                  </View>
+                )}
+                keyExtractor={(item) => item.id}
+              />
+            </>
           )}
 
           <View style={styles.row}>
@@ -1076,25 +1160,9 @@ export default function SettingsScreen() {
               </TouchableOpacity>
               <Text style={styles.poolNumber}>{currentPoolIndex + 1}</Text>
               <TouchableOpacity
-                onPress={() => {
-                  if (currentPoolIndex + 1 === fighterPairs.length) {
-                    if (isSaveParticipantsForPools) {
-                      setParticipants([
-                        ...participants,
-                        [...participants[currentPoolIndex]],
-                      ]);
-                    } else {
-                      setParticipants([...participants, []]);
-                    }
-                    setFighterPairs([...fighterPairs, ...pairsDefault]);
-                    setPools([...pools, ...pairsDefault]);
-                    setCurrentPairIndex([...currentPairIndex, 0]);
-                    setDuels([...duels, []]);
-                    setIsPoolEnd([...isPoolEnd, false]);
-                  }
-                  setCurrentPoolIndex(currentPoolIndex + 1);
-                }}
-                style={styles.poolNavButton}
+                onPress={() => addPool()}
+                style={[styles.poolNavButton, isArrowNext && { opacity: 0.5 }]}
+                disabled={isArrowNext}
               >
                 <ChevronRight size={24} color={Colors.fg} />
               </TouchableOpacity>
@@ -1103,24 +1171,31 @@ export default function SettingsScreen() {
 
           <RadioGroup
             disabled={!isSimpleMode || isGroupBattle}
-            onChange={(val) => setTournamentSystem(parseInt(val))}
+            onChange={(val) => {
+              if (val === TournamentSystem.TRIATHLON)
+                setIsSaveParticipantsForPools(true);
+              setTournamentSystem(val as TournamentSystem);
+            }}
             value={tournamentSystem.toString()}
             options={systems}
           />
 
-          <Switch
-            title={t("groupBattles")}
-            value={isGroupBattle}
-            setValue={(val) => {
-              setIsGroupBattle(val);
-              setTournamentSystem(TournamentSystem.ROBIN);
-            }}
-          />
+          {tournamentSystem !== TournamentSystem.TRIATHLON && (
+            <Switch
+              title={t("groupBattles")}
+              value={isGroupBattle}
+              setValue={(val) => {
+                setIsGroupBattle(val);
+                setTournamentSystem(TournamentSystem.ROBIN);
+              }}
+            />
+          )}
 
           <Switch
             title={t("saveParticipantsForPools")}
             value={isSaveParticipantsForPools}
             setValue={setIsSaveParticipantsForPools}
+            disabled={tournamentSystem === TournamentSystem.TRIATHLON}
           />
 
           <Switch
@@ -1129,33 +1204,66 @@ export default function SettingsScreen() {
             setValue={setIsReverseSides}
             titleStyle={{ maxWidth: 200 }}
           />
+          {tournamentSystem !== TournamentSystem.TRIATHLON && (
+            <>
+              <Button
+                title={t("addNewPair")}
+                onPress={() => addPeople(false)}
+                disabled={
+                  !participants[currentPoolIndex] ||
+                  participants[currentPoolIndex].length < 2
+                }
+                style={styles.button}
+              />
 
-          <Button
-            title={t("addNewPair")}
-            onPress={() => addPeople(false)}
-            disabled={
-              !participants[currentPoolIndex] ||
-              participants[currentPoolIndex].length < 2
-            }
-            style={styles.button}
-          />
+              <Button
+                title={t("addNewPerson")}
+                onPress={() => addPeople(true)}
+                disabled={
+                  !participants[currentPoolIndex] ||
+                  participants[currentPoolIndex].length < 1
+                }
+                style={styles.button}
+              />
 
-          <Button
-            title={t("addNewPerson")}
-            onPress={() => addPeople(true)}
-            disabled={
-              !participants[currentPoolIndex] ||
-              participants[currentPoolIndex].length < 1
-            }
-            style={styles.button}
-          />
-
-          <Button
-            title={t("randomizePairs")}
-            onPress={genPairs}
-            style={styles.button}
-          />
+              <Button
+                title={t("randomizePairs")}
+                onPress={genPairs}
+                style={styles.button}
+              />
+            </>
+          )}
         </Section>
+
+        {/* Настройки для триатлона */}
+        {tournamentSystem === TournamentSystem.TRIATHLON && (
+          <Section>
+            <TriathlonWeaponsSettings />
+
+            <TriathlonTeamManager
+              participants={participants || []}
+              setFighterPairs={setFighterPairs}
+              addPool={() => addPool(false)}
+              setDuels={setDuels}
+              setIsPoolEnd={setIsPoolEnd}
+            />
+          </Section>
+        )}
+
+        {tournamentSystem === TournamentSystem.SWISS && (
+          <Section title={t("matchesCount")}>
+            <Text
+              style={{
+                textAlign: "center",
+                color: Colors.accent,
+                fontFamily: Fonts.bold,
+                fontSize: 30,
+              }}
+            >
+              {totalRounds}
+            </Text>
+          </Section>
+        )}
 
         <SelectPair
           poolIndex={currentPoolIndex}
@@ -1169,6 +1277,10 @@ export default function SettingsScreen() {
             removeParticipant(id2);
           }}
           onDragStateChange={setIsDragging}
+          participants={participants}
+          teams={
+            tournamentSystem === TournamentSystem.TRIATHLON ? teams : undefined
+          }
           manualMode
         />
 
@@ -1219,13 +1331,14 @@ export default function SettingsScreen() {
         <Section title={t("hitZones")}>
           {Object.entries(hitZones).map(([zone, pts]) => (
             <View key={zone} style={styles.zoneRow}>
-              <Text style={styles.zoneLabel}>
-                {hitZonesKeys[zone as keyof typeof hitZonesKeys] || zone}
-              </Text>
+              <Text style={styles.zoneLabel}>{t(zone)}</Text>
               <View style={styles.zoneInput}>
                 <TouchableOpacity
                   onPress={() =>
-                    setHitZones({ ...hitZones, [zone]: Math.max(0, pts - 1) })
+                    setHitZones({
+                      ...hitZones,
+                      [zone]: Math.max(0, pts - 1),
+                    })
                   }
                   style={styles.zoneButton}
                 >
@@ -1286,36 +1399,37 @@ export default function SettingsScreen() {
           />
         </Section>
 
-        {/* Настройки пула */}
-        <Section title={t("poolSettings")}>
-          <View style={styles.row}>
-            <Text style={[styles.label, { width: "60%" }]}>
-              {t("poolCountDelete")}
-            </Text>
-            <View style={styles.numberInput}>
-              <TouchableOpacity
-                onPress={() =>
-                  setPoolCountDelete(Math.max(1, poolCountDelete - 1))
-                }
-                style={styles.numberButton}
-              >
-                <Minus size={20} color={Colors.fg} />
-              </TouchableOpacity>
-              <Text style={styles.numberValue}>{poolCountDelete}</Text>
-              <TouchableOpacity
-                onPress={() => setPoolCountDelete(poolCountDelete + 1)}
-                style={styles.numberButton}
-              >
-                <Plus size={20} color={Colors.fg} />
-              </TouchableOpacity>
+        {tournamentSystem !== TournamentSystem.TRIATHLON && (
+          <Section title={t("poolSettings")}>
+            <View style={styles.row}>
+              <Text style={[styles.label, { width: "60%" }]}>
+                {t("poolCountDelete")}
+              </Text>
+              <View style={styles.numberInput}>
+                <TouchableOpacity
+                  onPress={() =>
+                    setPoolCountDelete(Math.max(1, poolCountDelete - 1))
+                  }
+                  style={styles.numberButton}
+                >
+                  <Minus size={20} color={Colors.fg} />
+                </TouchableOpacity>
+                <Text style={styles.numberValue}>{poolCountDelete}</Text>
+                <TouchableOpacity
+                  onPress={() => setPoolCountDelete(poolCountDelete + 1)}
+                  style={styles.numberButton}
+                >
+                  <Plus size={20} color={Colors.fg} />
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-          <Switch
-            title={t("isPoolRating")}
-            value={isPoolRating}
-            setValue={setIsPoolRating}
-          />
-        </Section>
+            <Switch
+              title={t("isPoolRating")}
+              value={isPoolRating}
+              setValue={setIsPoolRating}
+            />
+          </Section>
+        )}
 
         {/* Уведомления */}
         <Section title={t("notifications")}>
@@ -1339,9 +1453,7 @@ export default function SettingsScreen() {
             onPress={resetAll}
             style={styles.button}
             stroke
-          >
-            <RefreshCw size={24} color={Colors.fg} />
-          </Button>
+          />
         </Section>
       </KeyboardAwareScrollView>
     </SafeAreaView>
@@ -1404,7 +1516,6 @@ export const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "flex-end",
     gap: 12,
-    marginBottom: 12,
   },
   controllerButton: {
     padding: 8,
@@ -1446,9 +1557,6 @@ export const styles = StyleSheet.create({
   },
   closeButton: {
     padding: 4,
-  },
-  modalBody: {
-    marginTop: 12,
   },
   inputRow: {
     flexDirection: "row",

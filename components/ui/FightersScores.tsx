@@ -1,24 +1,32 @@
 import { Colors, Fonts } from "@/constants";
 import { useRouter } from "expo-router";
-import React from "react";
+import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Dimensions,
-  ScrollView,
+  FlatList,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import {
+  GestureHandlerRootView,
+  LongPressGestureHandler,
+  State,
+} from "react-native-gesture-handler";
+import ModalWindow from "./ModalWindow";
 
 type FightersScoresProps = {
   data: {
     idRed: string;
     nameRed: string;
     scoreRed: number;
+    hintRed?: string;
     nameBlue: string;
     idBlue: string;
     scoreBlue: number;
+    hintBlue?: string;
   }[];
   withoutLinks?: boolean;
 };
@@ -29,148 +37,196 @@ export default function FightersScores({
 }: FightersScoresProps) {
   const { t } = useTranslation();
   const router = useRouter();
+  const [fullNameModal, setFullNameModal] = useState<{
+    visible: boolean;
+    name: string;
+  }>({ visible: false, name: "" });
 
   const goToProfile = (id: string) => {
     router.push(`/profile/${id}`);
   };
 
-  return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={true}
-      contentContainerStyle={styles.scrollContainer}
+  const handleLongPress = (name: string) => {
+    setFullNameModal({ visible: true, name });
+  };
+
+  const renderItem = ({
+    item: d,
+    index,
+  }: {
+    item: (typeof data)[0];
+    index: number;
+  }) => (
+    <GestureHandlerRootView
+      style={[styles.row, index === data.length - 1 && styles.lastRow]}
     >
-      <View style={styles.container}>
-        {/* Заголовки */}
-        <View style={styles.headerRow}>
-          <View style={[styles.cell, styles.firstCell]}>
-            <Text style={styles.headerText}>{t("name")}</Text>
-          </View>
-          <View style={[styles.cell, styles.scoreCell]}>
-            <Text style={styles.headerText}>{t("score")}</Text>
-          </View>
-          <View style={[styles.cell, styles.scoreCell]}>
-            <Text style={styles.headerText}>{t("score")}</Text>
-          </View>
-          <View style={[styles.cell, styles.lastCell]}>
-            <Text style={styles.headerText}>{t("name")}</Text>
-          </View>
-        </View>
-
-        {/* Данные */}
-        {data.map((d, i) => (
-          <View
-            key={i}
-            style={[styles.row, i === data.length - 1 && styles.lastRow]}
-          >
-            <TouchableOpacity
-              style={[styles.cell, styles.firstCell]}
-              onPress={!withoutLinks ? () => goToProfile(d.idRed) : undefined}
-              disabled={withoutLinks}
-              activeOpacity={0.7}
+      <LongPressGestureHandler
+        onHandlerStateChange={({ nativeEvent }) => {
+          if (nativeEvent.state === State.ACTIVE) {
+            handleLongPress(d.nameRed);
+          }
+        }}
+        minDurationMs={500}
+      >
+        <TouchableOpacity
+          style={[styles.cell, styles.nameCell]}
+          onPress={!withoutLinks ? () => goToProfile(d.idRed) : undefined}
+          disabled={withoutLinks}
+          activeOpacity={0.7}
+        >
+          <View style={styles.cellContent}>
+            <Text
+              style={[
+                styles.cellText,
+                !withoutLinks && styles.linkText,
+                d.scoreRed > d.scoreBlue && styles.winnerText,
+              ]}
+              numberOfLines={1}
             >
-              <Text
-                style={[
-                  styles.cellText,
-                  !withoutLinks && styles.linkText,
-                  d.scoreRed > d.scoreBlue && styles.winnerText,
-                ]}
-                numberOfLines={1}
-              >
-                {d.nameRed}
-              </Text>
-            </TouchableOpacity>
-
-            <View style={[styles.cell, styles.scoreCell]}>
-              <Text
-                style={[
-                  styles.scoreText,
-                  d.scoreRed > d.scoreBlue && styles.winnerScoreText,
-                ]}
-              >
-                {d.scoreRed}
-              </Text>
-            </View>
-
-            <View style={[styles.cell, styles.scoreCell]}>
-              <Text
-                style={[
-                  styles.scoreText,
-                  d.scoreBlue > d.scoreRed && styles.winnerScoreText,
-                ]}
-              >
-                {d.scoreBlue}
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.cell, styles.lastCell]}
-              onPress={!withoutLinks ? () => goToProfile(d.idBlue) : undefined}
-              disabled={withoutLinks}
-              activeOpacity={0.7}
-            >
-              <Text
-                style={[
-                  styles.cellText,
-                  !withoutLinks && styles.linkText,
-                  d.scoreBlue > d.scoreRed && styles.winnerText,
-                ]}
-                numberOfLines={1}
-              >
-                {d.nameBlue}
-              </Text>
-            </TouchableOpacity>
+              {d.nameRed}
+            </Text>
+            {!!d.hintRed && <Text style={styles.hintText}>{d.hintRed}</Text>}
           </View>
-        ))}
+        </TouchableOpacity>
+      </LongPressGestureHandler>
+
+      <View style={[styles.cell, styles.scoreCell]}>
+        <Text
+          style={[
+            styles.scoreText,
+            d.scoreRed > d.scoreBlue && styles.winnerScoreText,
+          ]}
+        >
+          {d.scoreRed}
+        </Text>
       </View>
-    </ScrollView>
+
+      <View style={[styles.cell, styles.scoreCell]}>
+        <Text
+          style={[
+            styles.scoreText,
+            d.scoreBlue > d.scoreRed && styles.winnerScoreText,
+          ]}
+        >
+          {d.scoreBlue}
+        </Text>
+      </View>
+
+      <LongPressGestureHandler
+        onHandlerStateChange={({ nativeEvent }) => {
+          if (nativeEvent.state === State.ACTIVE) {
+            handleLongPress(d.nameBlue);
+          }
+        }}
+        minDurationMs={500}
+      >
+        <TouchableOpacity
+          style={[styles.cell, styles.nameCell]}
+          onPress={!withoutLinks ? () => goToProfile(d.idBlue) : undefined}
+          disabled={withoutLinks}
+          activeOpacity={0.7}
+        >
+          <View style={styles.cellContent}>
+            <Text
+              style={[
+                styles.cellText,
+                !withoutLinks && styles.linkText,
+                d.scoreBlue > d.scoreRed && styles.winnerText,
+              ]}
+              numberOfLines={1}
+            >
+              {d.nameBlue}
+            </Text>
+            {!!d.hintBlue && <Text style={styles.hintText}>{d.hintBlue}</Text>}
+          </View>
+        </TouchableOpacity>
+      </LongPressGestureHandler>
+    </GestureHandlerRootView>
+  );
+
+  return (
+    <View style={styles.container}>
+      {/* Заголовки */}
+      <View style={styles.headerRow}>
+        <View style={[styles.cell, styles.nameCell]}>
+          <Text style={styles.headerText}>{t("name")}</Text>
+        </View>
+        <View style={[styles.cell, styles.scoreCell]}>
+          <Text style={styles.headerText}>{t("score")}</Text>
+        </View>
+        <View style={[styles.cell, styles.scoreCell]}>
+          <Text style={styles.headerText}>{t("score")}</Text>
+        </View>
+        <View style={[styles.cell, styles.nameCell]}>
+          <Text style={styles.headerText}>{t("name")}</Text>
+        </View>
+      </View>
+
+      {/* Данные */}
+      <FlatList
+        data={data}
+        renderItem={renderItem}
+        keyExtractor={(_, index) => index.toString()}
+        scrollEnabled={false}
+        showsVerticalScrollIndicator={false}
+      />
+
+      {/* Модальное окно с полным именем */}
+      <ModalWindow
+        isOpen={fullNameModal.visible}
+        onClose={() => setFullNameModal({ visible: false, name: "" })}
+        showCloseButton={true}
+      >
+        <View style={styles.modalContent}>
+          <Text style={styles.fullNameText}>{fullNameModal.name}</Text>
+        </View>
+      </ModalWindow>
+    </View>
   );
 }
 
 const { width } = Dimensions.get("window");
 
 const styles = StyleSheet.create({
-  scrollContainer: {
-    flexGrow: 1,
-  },
   container: {
     backgroundColor: Colors.accentTransparent,
     borderRadius: 16,
     overflow: "hidden",
-    minWidth: width - 32,
+    width: width - 32,
   },
   headerRow: {
     flexDirection: "row",
     backgroundColor: Colors.accent,
+    height: 44,
   },
   row: {
     flexDirection: "row",
     borderBottomWidth: 1,
     borderBottomColor: Colors.accent,
+    minHeight: 50,
   },
   lastRow: {
-    borderBottomWidth: 0, // Убираем линию у последней строки
+    borderBottomWidth: 0,
   },
   cell: {
-    paddingVertical: 12,
-    paddingHorizontal: 8,
     justifyContent: "center",
     alignItems: "center",
-    minWidth: 70,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
   },
-  firstCell: {
-    flex: 2,
-    borderTopLeftRadius: 16,
+  cellContent: {
+    justifyContent: "center",
+    alignItems: "center",
+    width: "100%",
   },
-  lastCell: {
-    flex: 2,
-    borderTopRightRadius: 16,
+  nameCell: {
+    flex: 3,
+    minWidth: 80,
   },
   scoreCell: {
-    flex: 1,
-    width: 70, // Фиксированная ширина для ячеек с очками
-    justifyContent: "center",
-    alignItems: "center",
+    width: 60,
+    flexShrink: 0,
+    flexGrow: 0,
   },
   headerText: {
     color: Colors.bg,
@@ -178,10 +234,16 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.semiBold,
     textAlign: "center",
   },
+  hintText: {
+    color: Colors.placeholder,
+    fontSize: 10,
+    marginTop: 1,
+  },
   cellText: {
     color: Colors.fg,
     fontSize: 14,
     fontFamily: Fonts.regular,
+    textAlign: "center",
   },
   linkText: {
     color: Colors.accent,
@@ -196,14 +258,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: Fonts.medium,
     textAlign: "center",
-    minWidth: 40,
+    minWidth: 30,
   },
   winnerScoreText: {
     color: Colors.fg,
     backgroundColor: Colors.accentTransparent,
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 2,
     borderRadius: 8,
     overflow: "hidden",
+  },
+  modalContent: {
+    alignItems: "center",
+    paddingVertical: 20,
+  },
+  fullNameText: {
+    color: Colors.fg,
+    fontSize: 24,
+    fontFamily: Fonts.bold,
+    textAlign: "center",
   },
 });

@@ -7,6 +7,7 @@ import {
   MatchTypesType,
   ParticipantPlayoffType,
   ParticipantType,
+  TeamType,
   TournamentMatchType,
   TournamentStatusType,
   TournamentType,
@@ -311,3 +312,103 @@ export function parseContractError(error: any): string {
 
   return "";
 }
+
+export function getTeamMembersByTeamId(
+  teamId: number,
+  teams: TeamType[],
+  participants: ParticipantType[],
+) {
+  const membersIds = teams.find((t) => t.id === teamId)!.members;
+  const members = participants.filter((p) => membersIds.includes(p.id));
+
+  return members;
+}
+
+export const teamSelect =
+  (
+    teams: TeamType[],
+    currentTeamsIndexes: {
+      redTeam: number;
+      blueTeam: number;
+    },
+    participants: ParticipantType[][] | undefined,
+    poolIndex: number,
+    setCurrentTeamsIndexes: React.Dispatch<
+      React.SetStateAction<
+        {
+          redTeam: number;
+          blueTeam: number;
+        }[]
+      >
+    >,
+    setFighterPairs: (newPairs: [ParticipantType, ParticipantType][][]) => void,
+  ) =>
+  (
+    teamId: number,
+    type: "red" | "blue",
+    altTeams?: TeamType[],
+    teamBlueId?: number,
+    poolIdx?: number,
+  ) => {
+    const indexPool = poolIdx || poolIndex;
+    const currentTeams = altTeams || teams;
+    // Обновляем индексы выбранных команд
+    const newIndexes = {
+      redTeam:
+        type === "red"
+          ? currentTeams.findIndex((t) => t.id === teamId)
+          : currentTeamsIndexes.redTeam,
+      blueTeam: teamBlueId
+        ? currentTeams.findIndex((t) => t.id === teamBlueId)
+        : type === "blue"
+          ? currentTeams.findIndex((t) => t.id === teamId)
+          : currentTeamsIndexes.blueTeam,
+    };
+    setCurrentTeamsIndexes((state) =>
+      changeValueInStateArray(state, newIndexes, indexPool),
+    );
+
+    // Получаем актуальные команды
+    const redTeamId =
+      type === "red" ? teamId : currentTeams[currentTeamsIndexes.redTeam]?.id;
+    const blueTeamId =
+      teamBlueId ||
+      (type === "blue"
+        ? teamId
+        : currentTeams[currentTeamsIndexes.blueTeam]?.id);
+
+    // Проверяем, что обе команды существуют
+    if (!redTeamId || !blueTeamId) return;
+
+    const redTeamMembers = getTeamMembersByTeamId(
+      redTeamId,
+      currentTeams,
+      participants![0],
+    );
+    const blueTeamMembers = getTeamMembersByTeamId(
+      blueTeamId,
+      currentTeams,
+      participants![0],
+    );
+    // Формируем пары (по одному бойцу из каждой команды)
+    const pairs = redTeamMembers.map((redFencer, index) => [
+      redFencer,
+      blueTeamMembers[index] || blueTeamMembers[0], // если не хватает, берём первого
+    ]);
+
+    // Обновляем пары
+    setFighterPairs((state) => {
+      const buf = [...state];
+      buf[indexPool] = pairs;
+      return buf;
+    });
+  };
+
+export function changeValueInStateArray<T>(state: T[], val: T, index: number) {
+  const buf = [...state];
+  buf[index] = val;
+  return buf;
+}
+
+export const filterState = (state: any[], idxDeleteItem: number) =>
+  state.filter((_, idx) => idx !== idxDeleteItem);

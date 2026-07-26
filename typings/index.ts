@@ -10,6 +10,7 @@ export enum TournamentSystem {
   OLYMPIC = "olympic",
   ROBIN = "robin",
   SWISS = "swiss",
+  TRIATHLON = "triathlon",
 }
 
 export type LangType = "en" | "ru" | "zh";
@@ -27,6 +28,41 @@ export type ParticipantType = {
   // для швейцарской
   opponents: string[]; // уже сыгранные соперники (чтобы не повторяться)
   buchholz: number; // доп. показатель, если понадобится
+  arena?: number; // площадка для сражений по уровню силы
+  // для триатлона
+  weapon?: string; // оружие бойца
+  gender?: Gender; // пол бойца
+};
+
+export type TeamType = {
+  id: number;
+  name: string;
+  members: string[];
+  deactive: boolean;
+};
+
+export type TeamPlayOffType = {
+  id: number;
+  name: string;
+  scores: number;
+  members: ParticipantType[];
+};
+
+export type TeamStats = {
+  teamId: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  scoresFor: number;
+  scoresAgainst: number;
+  matchesCount: number;
+};
+
+export type PodiumType = {
+  first: ParticipantPlayoffType | TeamPlayOffType | null;
+  second: ParticipantPlayoffType | TeamPlayOffType | null;
+  third: ParticipantPlayoffType | TeamPlayOffType | null;
+  fourth: ParticipantPlayoffType | TeamPlayOffType | null;
 };
 
 export type SliceParticipantType = Pick<

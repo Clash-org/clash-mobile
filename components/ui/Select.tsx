@@ -3,17 +3,17 @@ import { Check, ChevronDown, X } from "lucide-react-native";
 import React, { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-    FlatList,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TextStyle,
-    TouchableOpacity,
-    View,
-    ViewStyle,
+  FlatList,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TextStyle,
+  TouchableOpacity,
+  View,
+  ViewStyle,
 } from "react-native";
 
 export interface SelectOption<T> {
@@ -23,6 +23,7 @@ export interface SelectOption<T> {
 
 interface SelectProps<T> {
   options: SelectOption<T>[];
+  hiddenOptions?: T[];
   value?: T | T[];
   inputValue?: string;
   setValue: (value: any) => void;
@@ -36,6 +37,7 @@ interface SelectProps<T> {
   required?: boolean;
   style?: ViewStyle;
   triggerStyle?: ViewStyle;
+  inputStyle?: TextStyle;
   dropdownStyle?: ViewStyle;
   optionStyle?: ViewStyle;
   optionTextStyle?: TextStyle;
@@ -43,6 +45,7 @@ interface SelectProps<T> {
 
 export default function Select<T>({
   options,
+  hiddenOptions,
   value,
   inputValue,
   setValue,
@@ -55,6 +58,7 @@ export default function Select<T>({
   maxSelected,
   style,
   triggerStyle,
+  inputStyle,
   dropdownStyle,
   optionStyle,
   optionTextStyle,
@@ -78,11 +82,13 @@ export default function Select<T>({
   );
 
   // Фильтрация опций по поиску
-  const filteredOptions = options.filter(
-    (opt) =>
-      opt.label.toLowerCase().includes(searchTerm.toLowerCase()) &&
-      (multiple ? true : !selectedValues.includes(opt.value)),
-  );
+  const filteredOptions = options
+    .filter((opt) => !hiddenOptions?.includes(opt.value))
+    .filter(
+      (opt) =>
+        opt.label.toLowerCase().includes(searchTerm.toLowerCase()) &&
+        (multiple ? true : !selectedValues.includes(opt.value)),
+    );
 
   const handleSelectOption = (option: SelectOption<T>) => {
     if (multiple) {
@@ -120,12 +126,12 @@ export default function Select<T>({
     if (multiple) {
       return selectedOptions.length > 0
         ? `${selectedOptions.length} выбрано`
-        : placeholder;
+        : "";
     }
     if (setInputValue !== undefined && inputValue) {
       return inputValue;
     }
-    return selectedOptions[0]?.label || placeholder;
+    return options.find((opt) => opt.value === value)?.label || "";
   };
 
   const renderSelectedTags = () => {
@@ -217,7 +223,7 @@ export default function Select<T>({
       >
         <TextInput
           ref={inputRef}
-          style={[styles.input, multiple && styles.inputMultiple]}
+          style={[styles.input, inputStyle, multiple && styles.inputMultiple]}
           value={isOpen ? searchTerm : getDisplayText()}
           onChangeText={setSearchTerm}
           onFocus={() => !disabled && setIsOpen(true)}

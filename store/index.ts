@@ -3,6 +3,8 @@ import {
   LangType,
   ParticipantPlayoffType,
   ParticipantType,
+  TeamPlayOffType,
+  TeamType,
   TournamentSystem,
   TournamentType,
   UserType,
@@ -80,7 +82,9 @@ export const currentPoolIndexAtom = atom(0); // Индекс текущего п
 
 export const isPoolEndAtom = atom<boolean[]>([false]); // Содержит информацию об окончании битв в пулах
 
-export const playoffAtom = atom<ParticipantPlayoffType[][][]>([]);
+export const playoffAtom = atom<
+  [ParticipantPlayoffType, ParticipantPlayoffType][][]
+>([]);
 
 export const poolCountDeleteAtom = atom(1);
 
@@ -113,3 +117,27 @@ export const blockchainAtom = atom({
   privateKey:
     "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
 });
+
+export const triathlonWeaponsAtom = atom<string[]>(["Меч", "Рапира", "Сабля"]);
+
+export const teamsAtom = atom<TeamType[][]>([]);
+
+export const teamCountAtom = atom(3);
+
+export const currentTeamsIndexesAtom = atom([{ redTeam: 0, blueTeam: 1 }]);
+
+export const playoffTriathlonAtom = atom<
+  [TeamPlayOffType, TeamPlayOffType][][]
+>([]);
+
+export const virtualPoolIndexAtom = atom(0);
+
+export const virtualPairIndexAtom = atom([0]);
+
+export const currentRoundAtom = atom<number[]>([]);
+
+export const totalRoundsAtom = atom<number[]>([]);
+
+export const rankParticipantsAtom = atom<ParticipantType[]>([]);
+
+export const idsRDAtom = atom(new Map<string, number>());

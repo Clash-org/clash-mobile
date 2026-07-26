@@ -30,14 +30,22 @@ import {
   playoffAtom,
   playoffIndexAtom,
   playoffMatchIndexAtom,
+  playoffTriathlonAtom,
   protests1Atom,
   protests2Atom,
   score1Atom,
   score2Atom,
+  virtualPairIndexAtom,
+  virtualPoolIndexAtom,
   warnings1Atom,
   warnings2Atom,
 } from "@/store";
-import { formatTime, truncateFullName } from "@/utils/helpers";
+import { ParticipantType } from "@/typings";
+import {
+  changeValueInStateArray,
+  formatTime,
+  truncateFullName,
+} from "@/utils/helpers";
 import { incWin } from "@/utils/incWin";
 import {
   ChevronsRight,
@@ -59,6 +67,8 @@ export default function FightScreen() {
   const [isReverseSides] = useAtom(isReverseSidesAtom);
   const [currentPairIndex, setCurrentPairIndex] = useAtom(currentPairIndexAtom);
   const [currentPoolIndex] = useAtom(currentPoolIndexAtom);
+  const [virtualPairIndex, setVirtualPairIndex] = useAtom(virtualPairIndexAtom);
+  const [virtualPoolIndex] = useAtom(virtualPoolIndexAtom);
   const [isRunning, setIsRunning] = useAtom(isRunningAtom);
   const [hitZones] = useAtom(hitZonesAtom);
   const [fightTime] = useAtom(fightTimeAtom);
@@ -72,20 +82,41 @@ export default function FightScreen() {
   const [isPoolEnd] = useAtom(isPoolEndAtom);
   const isPlayoff = !isPoolEnd.includes(false);
   const [playoff, setPlayoff] = useAtom(playoffAtom);
+  const [playoffTriathlon, setPlayoffTriathlon] = useAtom(playoffTriathlonAtom);
   const [fighterPairs, setFighterPairs] = useAtom(fighterPairsAtom);
   const [history, setHistory] = useAtom(historyAtom);
   const [playoffIndex] = useAtom(playoffIndexAtom);
   const [playoffMatchIndex] = useAtom(playoffMatchIndexAtom);
+  const isTriathlon = !!playoffTriathlon.length;
 
   const [isOpen, setIsOpen] = useState(false);
   const [isHistory, setIsHistory] = useState(false);
   const [timeLeft, setTimeLeft] = useState(fightTime);
-  const [winner, setWinner] = useState("");
   const [isFinished, setIsFinished] = useState(false);
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const prevPairIndexRef = useRef(currentPairIndex);
+  const prevVirtualPairIndexRef = useRef(virtualPairIndex);
+  const prevScore1Ref = useRef(score1);
+  const prevScore2Ref = useRef(score2);
+  const teams = isTriathlon
+    ? (playoffTriathlon[playoffIndex] ?? []).map((t) => t.flat())
+    : undefined;
+  const participants = teams
+    ? teams?.map((teamArr) => teamArr.map((t) => t.members ?? [])).flat()
+    : [];
+  const triathlonFighterPairs = (
+    isTriathlon
+      ? (playoffTriathlon[playoffIndex] ?? []).map(
+          (teamsPairs) =>
+            teamsPairs?.[0]?.members.map((m, idx) => [
+              m,
+              teamsPairs?.[1]?.members[idx],
+            ]) ?? [],
+        )
+      : []
+  ) as [ParticipantType, ParticipantType][][];
 
   const getFighterData = () => {
     let name1 = "",
@@ -95,24 +126,35 @@ export default function FightScreen() {
 
     try {
       if (isPlayoff) {
-        if (playoff?.[playoffIndex]?.[playoffMatchIndex]?.[0]) {
-          name1 = playoff[playoffIndex][playoffMatchIndex][0]?.name || "";
-          name2 = playoff[playoffIndex][playoffMatchIndex][1]?.name || "";
-          id1 = playoff[playoffIndex][playoffMatchIndex][0]?.id || "";
-          id2 = playoff[playoffIndex][playoffMatchIndex][1]?.id || "";
+        if (playoffTriathlon[0].length) {
+          const pair = playoffTriathlon[playoffIndex][playoffMatchIndex];
+          const pointer = virtualPairIndex[virtualPoolIndex];
+          const fighter1 = pair[0].members[pointer];
+          const fighter2 = pair[1].members[pointer];
+          name1 = fighter1?.name || "";
+          name2 = fighter2?.name || "";
+          id1 = String(fighter1?.id || "");
+          id2 = String(fighter2?.id || "");
+        } else if (playoff?.[playoffIndex]?.[playoffMatchIndex]?.[0]) {
+          const fighter1 = playoff[playoffIndex][playoffMatchIndex][0];
+          const fighter2 = playoff[playoffIndex][playoffMatchIndex][1];
+          name1 = fighter1?.name || "";
+          name2 = fighter2?.name || "";
+          id1 = String(fighter1?.id || "");
+          id2 = String(fighter2?.id || "");
         }
       } else {
         const currentIndex = currentPairIndex[currentPoolIndex];
         if (fighterPairs?.[currentPoolIndex]?.[currentIndex]?.[0]) {
-          name1 = fighterPairs[currentPoolIndex][currentIndex]?.[0]?.name || "";
-          name2 = fighterPairs[currentPoolIndex][currentIndex]?.[1]?.name || "";
-          id1 = fighterPairs[currentPoolIndex][currentIndex]?.[0]?.id || "";
-          id2 = fighterPairs[currentPoolIndex][currentIndex]?.[1]?.id || "";
+          const fighter1 = fighterPairs[currentPoolIndex][currentIndex]?.[0];
+          const fighter2 = fighterPairs[currentPoolIndex][currentIndex]?.[1];
+          name1 = fighter1?.name || "";
+          name2 = fighter2?.name || "";
+          id1 = fighter1?.id || "";
+          id2 = fighter2?.id || "";
         }
       }
-    } catch (e) {
-      console.error("Ошибка получения данных бойцов:", e);
-    }
+    } catch {}
 
     return {
       redName: name1,
@@ -124,39 +166,104 @@ export default function FightScreen() {
 
   const { redName, blueName, fighterId1, fighterId2 } = getFighterData();
   let nextRedName =
-    fighterPairs[currentPoolIndex]?.[
-      currentPairIndex[currentPoolIndex] + 1
-    ]?.[0]?.name || "";
-  let nextBlueName =
-    fighterPairs[currentPoolIndex]?.[
-      currentPairIndex[currentPoolIndex] + 1
-    ]?.[1]?.name || "";
+    (isTriathlon
+      ? triathlonFighterPairs[virtualPoolIndex]?.[
+          virtualPairIndex[virtualPoolIndex] + 1
+        ]?.[0]?.name
+      : fighterPairs[currentPoolIndex]?.[
+          currentPairIndex[currentPoolIndex] + 1
+        ]?.[0]?.name) || "";
+  let nextBlueName = isTriathlon
+    ? triathlonFighterPairs[virtualPoolIndex]?.[
+        virtualPairIndex[virtualPoolIndex] + 1
+      ]?.[1]?.name
+    : fighterPairs[currentPoolIndex]?.[
+        currentPairIndex[currentPoolIndex] + 1
+      ]?.[1]?.name || "";
   if (nextRedName === "—" || nextBlueName === "—") {
     nextRedName = "";
     nextBlueName = "";
   }
 
-  const fightStop = async () => {
+  const fightStop = useCallback(async () => {
     setIsRunning(false);
     const isDraw = score1 === score2;
 
     const changePlayoffScores = () => {
-      setPlayoff((state) => {
-        const buf = [...state];
-        buf[playoffIndex][playoffMatchIndex][0] = {
-          ...buf[playoffIndex][playoffMatchIndex][0],
-          scores: score1,
-          wins: score1 > score2 ? 1 : 0,
-          differenceWinsLosses: score1 - score2,
-        };
-        buf[playoffIndex][playoffMatchIndex][1] = {
-          ...buf[playoffIndex][playoffMatchIndex][1],
-          scores: score2,
-          wins: score1 < score2 ? 1 : 0,
-          differenceWinsLosses: score2 - score1,
-        };
-        return buf;
-      });
+      if (isTriathlon) {
+        setPlayoffTriathlon((state) => {
+          const buf = [...state];
+          const currentTeamsPair = buf[playoffIndex][playoffMatchIndex];
+          for (const [idx, pair] of [
+            currentTeamsPair,
+            currentTeamsPair,
+          ].entries()) {
+            const team = pair[idx];
+            const newMembers = team.members.map((m) => {
+              if (m.id === fighterId1) {
+                return {
+                  ...m,
+                  scores: score1,
+                  wins: score1 > score2 ? m.wins + 1 : 0,
+                  protests: protests1,
+                  warnings: warnings1,
+                  doubleHits,
+                };
+              } else if (m.id === fighterId2) {
+                return {
+                  ...m,
+                  scores: score2,
+                  wins: score2 > score1 ? m.wins + 1 : 0,
+                  protests: protests2,
+                  warnings: warnings2,
+                  doubleHits,
+                };
+              }
+
+              return m;
+            });
+            buf[playoffIndex][playoffMatchIndex][idx] = {
+              ...team,
+              members: newMembers,
+              scores: newMembers.reduce(
+                (sum, fighter) => sum + fighter.scores,
+                0,
+              ),
+            };
+          }
+
+          return buf;
+        });
+      } else {
+        setPlayoff((state) => {
+          const buf = [...state];
+          const [p1, p2] = buf[playoffIndex][playoffMatchIndex];
+
+          buf[playoffIndex][playoffMatchIndex] = [
+            {
+              ...p1,
+              scores: score1,
+              wins: score1 > score2 ? 1 : 0,
+              differenceWinsLosses: score1 - score2,
+              ratioWinsLosses: score1 / score2,
+              protests: protests1,
+              warnings: warnings1,
+              doubleHits,
+            },
+            {
+              ...p2,
+              scores: score2,
+              wins: score1 < score2 ? 1 : 0,
+              differenceWinsLosses: score2 - score1,
+              ratioWinsLosses: score2 / score1,
+              protests: protests2,
+              warnings: warnings2,
+              doubleHits,
+            },
+          ];
+          return buf;
+        });
+      }
     };
 
     if (!isDraw) {
@@ -256,14 +363,37 @@ export default function FightScreen() {
         : isGroupBattle
           ? t("blueTeam")
           : blueName;
-    setWinner(winnerName);
     setIsFinished(true);
 
     Toast.show({
       type: "success",
       text1: isDraw ? t("draw") : `${t("win")}: ${winnerName}`,
     });
-  };
+  }, [
+    score1,
+    score2,
+    isRunning,
+    isPlayoff,
+    isGroupBattle,
+    redName,
+    blueName,
+    fighterId1,
+    fighterId2,
+    currentPairIndex,
+    currentPoolIndex,
+    setFighterPairs,
+    warnings1,
+    protests1,
+    doubleHits,
+    warnings2,
+    protests2,
+    setPlayoff,
+    playoffIndex,
+    playoffMatchIndex,
+    setIsRunning,
+    setIsFinished,
+    t,
+  ]);
 
   // Таймер
   useEffect(() => {
@@ -295,9 +425,9 @@ export default function FightScreen() {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isRunning, timeLeft]);
+  }, [isRunning, timeLeft, fightStop, playSound, fightTime, t]);
 
-  const resetFight = () => {
+  const resetFight = useCallback(() => {
     if (!isGroupBattle) {
       setScore1(0);
       setScore2(0);
@@ -311,9 +441,22 @@ export default function FightScreen() {
     setIsRunning(false);
     setHistory([]);
     setIsFinished(false);
-    setWinner("");
     stopSound();
-  };
+  }, [
+    isGroupBattle,
+    setScore1,
+    setScore2,
+    setProtests1,
+    setProtests2,
+    setWarnings1,
+    setWarnings2,
+    setDoubleHits,
+    fightTime,
+    setIsRunning,
+    setHistory,
+    setIsFinished,
+    stopSound,
+  ]);
 
   const addPoints = useCallback(
     (
@@ -326,27 +469,45 @@ export default function FightScreen() {
     [hitZones],
   );
 
-  const removePoints = (
-    setter: React.Dispatch<React.SetStateAction<number>>,
-  ) => {
-    setter((s: number) => Math.max(0, s - 1));
-  };
+  const removePoints = useCallback(
+    (setter: React.Dispatch<React.SetStateAction<number>>) => {
+      setter((s: number) => s - 1);
+    },
+    [],
+  );
 
   useEffect(() => {
+    // Отменяем предыдущий таймер
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
     }
-    if (score1 !== 0 || score2 !== 0) {
+
+    // Если счёт изменился
+    if (score1 !== prevScore1Ref.current || score2 !== prevScore2Ref.current) {
+      prevScore1Ref.current = score1;
+      prevScore2Ref.current = score2;
+
+      // Устанавливаем новый таймер с задержкой 500мс
       timeoutRef.current = setTimeout(() => {
-        setHistory((prev) => [...prev, { score1, score2 }]);
-      }, 3000);
+        setHistory((prev) => {
+          // Проверяем, не было ли уже такой записи (чтобы избежать дублей)
+          const lastEntry = prev[prev.length - 1];
+          if (lastEntry?.score1 === score1 && lastEntry?.score2 === score2) {
+            return prev;
+          }
+          return [...prev, { score1, score2 }];
+        });
+      }, 500); // Уменьшил с 3000 до 500
     }
+
     return () => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
       }
     };
-  }, [score1, score2]);
+  }, [score1, score2, setHistory]);
 
   useEffect(() => {
     setTimeLeft(fightTime);
@@ -355,12 +516,21 @@ export default function FightScreen() {
   useEffect(() => {
     if (
       prevPairIndexRef.current[currentPoolIndex] !==
-      currentPairIndex[currentPoolIndex]
+        currentPairIndex[currentPoolIndex] ||
+      prevVirtualPairIndexRef.current[virtualPoolIndex] !==
+        virtualPairIndex[virtualPoolIndex]
     ) {
       resetFight();
     }
     prevPairIndexRef.current = currentPairIndex;
-  }, [currentPairIndex, currentPoolIndex]);
+    prevVirtualPairIndexRef.current = virtualPairIndex;
+  }, [
+    currentPairIndex,
+    currentPoolIndex,
+    virtualPairIndex,
+    virtualPoolIndex,
+    resetFight,
+  ]);
 
   const fighterData = [
     {
@@ -387,7 +557,6 @@ export default function FightScreen() {
 
   return (
     <View style={[styles.container, isReverseSides && styles.reverse]}>
-      {/* Левая и правая половины */}
       {fighterData.map((data, i) => (
         <View
           key={i}
@@ -451,22 +620,29 @@ export default function FightScreen() {
         </View>
       ))}
 
-      {/* Нижняя панель */}
       <View style={styles.bottomBar}>
         {isFinished && nextRedName && nextBlueName && (
           <View style={styles.nextPairButton}>
             <Button
               style={{ minWidth: 60 }}
               onPress={() =>
-                setCurrentPairIndex((state) => {
-                  const buf = [...state];
-                  buf[currentPoolIndex] =
-                    fighterPairs[currentPoolIndex].length >
-                    buf[currentPoolIndex] + 1
-                      ? buf[currentPoolIndex] + 1
-                      : buf[currentPoolIndex];
-                  return buf;
-                })
+                isTriathlon
+                  ? setVirtualPairIndex((state) =>
+                      changeValueInStateArray(
+                        state,
+                        state[virtualPoolIndex] + 1,
+                        virtualPoolIndex,
+                      ),
+                    )
+                  : setCurrentPairIndex((state) => {
+                      const buf = [...state];
+                      buf[currentPoolIndex] =
+                        fighterPairs[currentPoolIndex].length >
+                        buf[currentPoolIndex] + 1
+                          ? buf[currentPoolIndex] + 1
+                          : buf[currentPoolIndex];
+                      return buf;
+                    })
               }
             >
               <ChevronsRight size={20} color={Colors.fg} />
@@ -541,20 +717,27 @@ export default function FightScreen() {
         </View>
       </View>
 
-      {/* Модальные окна */}
       <ModalWindow isOpen={isOpen} onClose={() => setIsOpen(false)}>
         <SelectPair
           deleteEmptyPairs
-          fighterPairs={fighterPairs}
-          poolIndex={currentPoolIndex}
-          currentPairIndex={currentPairIndex[currentPoolIndex]}
-          selectPair={(idx) =>
-            setCurrentPairIndex((state) => {
-              const buf = [...state];
-              buf[currentPoolIndex] = idx;
-              return buf;
-            })
+          fighterPairs={isTriathlon ? triathlonFighterPairs : fighterPairs}
+          poolIndex={isTriathlon ? virtualPoolIndex : currentPoolIndex}
+          currentPairIndex={
+            isTriathlon
+              ? virtualPairIndex[virtualPoolIndex]
+              : currentPairIndex[currentPoolIndex]
           }
+          selectPair={(idx) =>
+            (isTriathlon ? setVirtualPairIndex : setCurrentPairIndex)((state) =>
+              changeValueInStateArray(
+                state,
+                idx,
+                isTriathlon ? virtualPoolIndex : currentPoolIndex,
+              ),
+            )
+          }
+          participants={participants}
+          teams={isTriathlon ? teams : undefined}
         />
       </ModalWindow>
 

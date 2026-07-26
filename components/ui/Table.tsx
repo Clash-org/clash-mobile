@@ -25,7 +25,11 @@ export default function Table({
   }
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={true}
+      nestedScrollEnabled={true}
+    >
       <View style={styles.table}>
         {/* Header */}
         <View style={styles.headerRow}>

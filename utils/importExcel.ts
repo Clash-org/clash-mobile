@@ -3,7 +3,7 @@ import { SliceParticipantType } from "@/typings";
 import * as DocumentPicker from "expo-document-picker";
 import { File } from "expo-file-system";
 import Toast from "react-native-toast-message";
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 import { generateId } from "./helpers";
 
 export async function importExcel(): Promise<

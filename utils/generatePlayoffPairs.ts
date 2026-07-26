@@ -1,10 +1,17 @@
 import i18n from "@/i18n";
-import { ParticipantPlayoffType, ParticipantType } from "@/typings";
+import {
+  ParticipantPlayoffType,
+  ParticipantType,
+  TeamPlayOffType,
+  TeamType,
+} from "@/typings";
 import Toast from "react-native-toast-message";
+import { getTeamMembersByTeamId } from "./helpers";
+import { getHeadToHeadResult, getTeamStatsFromDuels } from "./matchesHandlers";
 
 function createPairsByStrength(
   participants: ParticipantPlayoffType[],
-): ParticipantPlayoffType[][] {
+): [ParticipantPlayoffType, ParticipantPlayoffType][] {
   // Сортируем участников по силе (от сильного к слабому)
   const sortedParticipants = [...participants].sort((a, b) => {
     // 1. Сравниваем по differenceWinsLosses
@@ -69,7 +76,6 @@ export function generatePlayoffPairs(
   poolCountDelete: number,
   isPoolRating: boolean,
 ) {
-  let countPools = 0;
   const poolPlayoffParticipants: ParticipantPlayoffType[][] = [];
   duels.forEach((duelsPool, poolIndex) => {
     poolPlayoffParticipants[poolIndex] = [];
@@ -136,7 +142,6 @@ export function generatePlayoffPairs(
         });
       }
     });
-    countPools++;
   });
 
   let playoffParticipants: ParticipantPlayoffType[] = [];
@@ -158,3 +163,105 @@ export function generatePlayoffPairs(
 
   return [createPairsByStrength(playoffParticipants)];
 }
+
+/**
+ * Формирует пары для плей-офф по олимпийской системе
+ * @param poolDuels - массив дуэлей пула
+ * @param teams - команды
+ * @returns массив пар команд для плей-офф
+ */
+export const getPlayoffTriathlonTeamsPairs = (
+  poolDuels: ParticipantType[][][],
+  teams: TeamType[],
+): [TeamPlayOffType, TeamPlayOffType][] => {
+  const activeTeams = teams.filter((t) => !t.deactive);
+
+  // 1. Получаем полную статистику команд
+  const teamStats = getTeamStatsFromDuels(poolDuels, activeTeams);
+
+  // 2. Сортируем по критериям из правил (п. 2.5.5)
+  const sortedStats = [...teamStats].sort((a, b) => {
+    // Критерий 1: Количество побед (больше → выше)
+    if (b.wins !== a.wins) return b.wins - a.wins;
+
+    // Критерий 2: Разница набранных/потерянных баллов (больше → выше)
+    const diffA = a.scoresFor - a.scoresAgainst;
+    const diffB = b.scoresFor - b.scoresAgainst;
+    if (diffB !== diffA) return diffB - diffA;
+
+    // Критерий 3: Результаты личной встречи
+    const headToHead = getHeadToHeadResult(
+      a.teamId,
+      b.teamId,
+      activeTeams,
+      poolDuels,
+    );
+    if (headToHead !== 0) return headToHead;
+
+    // Критерий 4: Количество набранных баллов (больше → выше)
+    if (b.scoresFor !== a.scoresFor) return b.scoresFor - a.scoresFor;
+
+    // Если всё равно - по id
+    return a.teamId - b.teamId;
+  });
+
+  const participants = poolDuels
+    .flat()
+    .flat()
+    .filter((obj, idx, arr) => idx === arr.findIndex((t) => t.id === obj.id));
+  // 3. Преобразуем в TeamPlayOffType
+  const allTeamsScores: TeamPlayOffType[] = sortedStats.map((stat) => ({
+    id: stat.teamId,
+    name:
+      activeTeams.find((t) => t.id === stat.teamId)?.name ||
+      String(stat.teamId),
+    scores: stat.scoresFor,
+    members: getTeamMembersByTeamId(stat.teamId, activeTeams, participants).map(
+      (fighter) => ({
+        ...fighter,
+        scores: 0,
+        wins: 0,
+        protests: 0,
+        warnings: 0,
+        doubleHits: 0,
+        opponents: [],
+        losses: 0,
+      }),
+    ),
+  }));
+
+  // 4. Определяем сколько команд выходит в плей-офф (не менее половины)
+  const playoffCount = Math.ceil(teams.length / 2);
+
+  // Берём топ-N команд
+  const playoffTeams = allTeamsScores.slice(0, playoffCount);
+
+  // 5. Формируем пары по олимпийской системе (1-й vs последний, 2-й vs предпоследний)
+  const pairs: [TeamPlayOffType, TeamPlayOffType][] = [];
+  const half = Math.ceil(playoffTeams.length / 2);
+
+  for (let i = 0; i < half; i++) {
+    const team1 = playoffTeams[i];
+    const team2 = playoffTeams[playoffTeams.length - 1 - i];
+
+    // Если это одна и та же команда (нечётное количество), она проходит дальше без боя
+    if (team1 && team2 && team1.id !== team2.id) {
+      pairs.push([
+        {
+          id: team1.id,
+          name: team1.name,
+          scores: 0,
+          members: team1.members,
+        },
+        {
+          id: team2.id,
+          name: team2.name,
+          scores: 0,
+          members: team2.members,
+        },
+      ]);
+    }
+  }
+
+  return pairs;
+};

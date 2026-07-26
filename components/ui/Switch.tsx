@@ -51,7 +51,7 @@ export default function Switch({
         ios_backgroundColor={trackColor.false}
         accessibilityLabel={title}
         accessibilityRole="switch"
-        style={styles.switch}
+        style={[styles.switch, disabled && styles.disabled]}
       />
     </View>
   );
@@ -76,5 +76,8 @@ const styles = StyleSheet.create({
   },
   switch: {
     transform: Platform.OS === "ios" ? [{ scale: 0.9 }] : [],
+  },
+  disabled: {
+    opacity: 0.5,
   },
 });
