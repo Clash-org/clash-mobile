@@ -100,8 +100,8 @@ export default function AppInfo() {
       <SafeAreaView style={styles.content}>
         <Text style={styles.title}>{t("aboutApp")}</Text>
         <Section title={`${t("version")}: ${currentVersion}`}>
-          {updateAvailable && !downloading && (
-            <Button onPress={downloadAndInstall}>
+          {updateAvailable && (
+            <Button onPress={downloadAndInstall} disabled={downloading}>
               <Download size={28} color={Colors.fg} />
               {releaseInfo?.version}
             </Button>

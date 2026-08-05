@@ -241,7 +241,7 @@ function PoolDetailModal({
 // Основной компонент
 export default function SettingsScreen() {
   const { t } = useTranslation();
-  const { checkForUpdates } = useUpdater();
+  const { checkForUpdates } = useUpdater({ autoCheck: false });
   const { playSound, deleteCustomSounds, stopSound, soundUpdate } =
     useBellSound();
 
@@ -467,17 +467,19 @@ export default function SettingsScreen() {
   /* ---------- загрузка настроек ---------- */
   const loadSettings = async () => {
     try {
-      const [t, z, p, s, r, c, lang, privateKey, spp] = await Promise.all([
-        AsyncStorage.getItem("fightTime"),
-        AsyncStorage.getItem("hitZones"),
-        AsyncStorage.getItem("participants"),
-        AsyncStorage.getItem("isSounds"),
-        AsyncStorage.getItem("isPoolRating"),
-        AsyncStorage.getItem("poolCountDelete"),
-        AsyncStorage.getItem("language"),
-        AsyncStorage.getItem("privateKey"),
-        AsyncStorage.getItem("isSaveParticipantsForPools"),
-      ]);
+      const [t, z, p, s, r, c, lang, privateKey, spp, showUpd] =
+        await Promise.all([
+          AsyncStorage.getItem("fightTime"),
+          AsyncStorage.getItem("hitZones"),
+          AsyncStorage.getItem("participants"),
+          AsyncStorage.getItem("isSounds"),
+          AsyncStorage.getItem("isPoolRating"),
+          AsyncStorage.getItem("poolCountDelete"),
+          AsyncStorage.getItem("language"),
+          AsyncStorage.getItem("privateKey"),
+          AsyncStorage.getItem("isSaveParticipantsForPools"),
+          AsyncStorage.getItem("showUpdates"),
+        ]);
 
       if (t) setFightTime(JSON.parse(t));
       if (z) setHitZones(JSON.parse(z));
@@ -497,7 +499,10 @@ export default function SettingsScreen() {
         });
       }
       if (spp) setIsSaveParticipantsForPools(JSON.parse(spp));
-      await checkForUpdates(showUpdates);
+      if (showUpd) {
+        setShowUpdates(Boolean(showUpd));
+      }
+      await checkForUpdates(Boolean(showUpd || showUpdates));
     } catch {
       Toast.show({ type: "error", text1: t("settingsLoadError") });
     }

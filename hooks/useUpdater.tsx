@@ -1,13 +1,14 @@
 import { DownloadProgress, ReleaseInfo, UpdateStatus } from "@/typings";
 import Constants from "expo-constants";
 import * as Device from "expo-device";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import UpdateService from "@/utils/updateService";
 import { useTranslation } from "react-i18next";
 import Toast from "react-native-toast-message";
 
 interface UseAppUpdateOptions {
+  autoCheck?: boolean;
   onUpdateAvailable?: (release: ReleaseInfo) => void;
   onUpdateInstalled?: () => void;
   onError?: (error: Error) => void;
@@ -37,7 +38,12 @@ interface UseAppUpdateReturn {
 export function useUpdater(
   options: UseAppUpdateOptions = {},
 ): UseAppUpdateReturn {
-  const { onUpdateAvailable, onUpdateInstalled, onError } = options;
+  const {
+    onUpdateAvailable,
+    onUpdateInstalled,
+    onError,
+    autoCheck = true,
+  } = options;
   const { t } = useTranslation();
 
   const [status, setStatus] = useState<UpdateStatus>(UpdateStatus.UP_TO_DATE);
@@ -57,7 +63,7 @@ export function useUpdater(
   const currentVersion = Constants.expoConfig?.version || "1.0.0";
 
   const checkForUpdates = useCallback(
-    async (showDialogOnUpdate: boolean): Promise<void> => {
+    async (showDialogOnUpdate = false): Promise<void> => {
       try {
         setStatus(UpdateStatus.CHECKING);
 
@@ -145,6 +151,11 @@ export function useUpdater(
     UpdateService.cancelDownload();
     setStatus(UpdateStatus.UP_TO_DATE);
     setDownloadProgress(0);
+  }, []);
+
+  // Автоматическая проверка
+  useEffect(() => {
+    if (autoCheck) checkForUpdates();
   }, []);
 
   return {
