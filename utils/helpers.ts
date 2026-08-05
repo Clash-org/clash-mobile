@@ -64,17 +64,14 @@ export const decodeFromBase64 = (str: string): string => {
   }
 };
 
-export function isPoolEndByDuels(
-  duels: ParticipantType[][][][],
-  poolIndex: number,
-) {
+export function isPoolEndByDuels(poolDuels: ParticipantType[][][]) {
   try {
-    const fightersCount = duels[poolIndex][0].reduce(
+    const fightersCount = poolDuels[0].reduce(
       (sum, pair) => pair.flat().filter((man) => man.name !== "—").length + sum,
       0,
     );
     const battlesCountMustBe = (fightersCount * (fightersCount - 1)) / 2;
-    const battlesCount = duels[poolIndex].reduce(
+    const battlesCount = poolDuels.reduce(
       (sum, pairs) =>
         pairs.filter((pair) => pair[0].name !== "—" && pair[1].name !== "—")
           .length + sum,
@@ -341,7 +338,9 @@ export const teamSelect =
         }[]
       >
     >,
-    setFighterPairs: (newPairs: [ParticipantType, ParticipantType][][]) => void,
+    setFighterPairs: React.Dispatch<
+      React.SetStateAction<[ParticipantType, ParticipantType][][]>
+    >,
   ) =>
   (
     teamId: number,
@@ -394,14 +393,12 @@ export const teamSelect =
     const pairs = redTeamMembers.map((redFencer, index) => [
       redFencer,
       blueTeamMembers[index] || blueTeamMembers[0], // если не хватает, берём первого
-    ]);
+    ]) as [ParticipantType, ParticipantType][];
 
     // Обновляем пары
-    setFighterPairs((state) => {
-      const buf = [...state];
-      buf[indexPool] = pairs;
-      return buf;
-    });
+    setFighterPairs((state) =>
+      changeValueInStateArray(state, pairs, indexPool),
+    );
   };
 
 export function changeValueInStateArray<T>(state: T[], val: T, index: number) {

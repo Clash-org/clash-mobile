@@ -47,13 +47,14 @@ import {
   useTournamentsByIds,
 } from "@/hooks/useTournaments";
 import { createPool, getMathes, updatePool } from "@/utils/api";
-import { generatePairs } from "@/utils/generatePairs";
+import { generatePairs, getRandomTwoTeams } from "@/utils/generatePairs";
 import {
   changeValueInStateArray,
   filterState,
   generateId,
   getName,
   isPoolEndByDuels,
+  teamSelect,
 } from "@/utils/helpers";
 import { importExcel } from "@/utils/importExcel";
 
@@ -65,6 +66,7 @@ import ModalWindow from "@/components/ui/ModalWindow";
 import SelectPair from "@/components/ui/SelectPair";
 import { Colors, Fonts, langLabels } from "@/constants";
 import useBellSound from "@/hooks/useBellSound";
+import { useUpdater } from "@/hooks/useUpdater";
 import { changeLanguage } from "@/i18n";
 import {
   blockchainAtom,
@@ -73,6 +75,7 @@ import {
   currentPoolIdAtom,
   currentPoolIndexAtom,
   currentRoundAtom,
+  currentTeamsIndexesAtom,
   currentTournamentAtom,
   currentWeaponIdAtom,
   doubleHitsAtom,
@@ -100,6 +103,7 @@ import {
   protests2Atom,
   score1Atom,
   score2Atom,
+  teamCountAtom,
   teamsAtom,
   totalRoundsAtom,
   tournamentSystemAtom,
@@ -121,6 +125,7 @@ import {
 import {
   assignInitialArenas,
   getRecommendedRounds,
+  isAllTeamsPairsPlayedFromDuels,
 } from "@/utils/matchesHandlers";
 import { ethers } from "ethers";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -142,7 +147,9 @@ function PoolControllers({
 }: PoolControllersProps) {
   return (
     <View style={styles.poolControllers}>
-      {isEnd && <CheckCircle size={24} color="#4CAF50" />}
+      {isEnd && (
+        <CheckCircle size={24} color="#4CAF50" style={{ marginTop: 8 }} />
+      )}
       <TouchableOpacity onPress={onImport} style={styles.controllerButton}>
         <CloudUpload size={24} color={Colors.fg} />
       </TouchableOpacity>
@@ -234,12 +241,17 @@ function PoolDetailModal({
 // Основной компонент
 export default function SettingsScreen() {
   const { t } = useTranslation();
+  const { checkForUpdates } = useUpdater();
   const { playSound, deleteCustomSounds, stopSound, soundUpdate } =
     useBellSound();
 
   /* ---------- атомы ---------- */
   const [user] = useAtom(userAtom);
-  const [teams] = useAtom(teamsAtom);
+  const [teams, setTeams] = useAtom(teamsAtom);
+  const [, setTeamCount] = useAtom(teamCountAtom);
+  const [currentTeamsIndexes, setCurrentTeamsIndexes] = useAtom(
+    currentTeamsIndexesAtom,
+  );
   const [isGroupBattle, setIsGroupBattle] = useAtom(isGroupBattleAtom);
   const [isReverseSides, setIsReverseSides] = useAtom(isReverseSidesAtom);
   const [isSaveParticipantsForPools, setIsSaveParticipantsForPools] = useAtom(
@@ -312,13 +324,6 @@ export default function SettingsScreen() {
     { label: t("swissSystem"), value: TournamentSystem.SWISS },
     { label: t("triathlonSystem"), value: TournamentSystem.TRIATHLON },
   ];
-
-  const hitZonesKeys = {
-    head: t("head"),
-    body: t("body"),
-    hands: t("hands"),
-    legs: t("legs"),
-  };
 
   /* ---------- эффекты ---------- */
   useEffect(() => {
@@ -492,6 +497,7 @@ export default function SettingsScreen() {
         });
       }
       if (spp) setIsSaveParticipantsForPools(JSON.parse(spp));
+      await checkForUpdates(showUpdates);
     } catch {
       Toast.show({ type: "error", text1: t("settingsLoadError") });
     }
@@ -531,9 +537,120 @@ export default function SettingsScreen() {
   };
 
   const importToPool = async (poolIndex: number) => {
-    const res = await importExcel();
-    if (res) {
-      const [data, length] = res;
+    const result = await importExcel();
+    if (!result) return;
+
+    const { data, dataTriathlon, length, teams, teamCount } = result;
+    // --- ТРИАТЛОН ---
+    if (teams && teams.length > 0) {
+      if (!dataTriathlon || dataTriathlon.length === 0) {
+        Toast.show({
+          type: "error",
+          text1: t("error"),
+        });
+        return;
+      }
+
+      const isEnd = isAllTeamsPairsPlayedFromDuels(teams, dataTriathlon);
+
+      // 1. Устанавливаем команды
+      setTeams((state) => changeValueInStateArray(state, teams, poolIndex));
+
+      // 2. Устанавливаем пары бойцов (dataTriathlon уже в формате [ParticipantType, ParticipantType][][])
+      if (isEnd)
+        setFighterPairs((state) =>
+          changeValueInStateArray(
+            state,
+            [...dataTriathlon[poolIndex]],
+            poolIndex,
+          ),
+        );
+
+      // 3. Устанавливаем участников
+      setParticipants((state) => {
+        const buf = [...state];
+        const allParticipants = dataTriathlon
+          .flat()
+          .flat() as ParticipantType[];
+        if (buf[poolIndex] && buf[poolIndex].length) {
+          buf[poolIndex] = buf[poolIndex].map((p) => {
+            const matchParticipant = allParticipants.find(
+              (a) => a.name === p.name,
+            );
+            if (matchParticipant)
+              return {
+                ...p,
+                id: matchParticipant.id,
+              };
+
+            return p;
+          });
+        }
+        buf[poolIndex] = [...buf[poolIndex], ...allParticipants].filter(
+          (item, index, self) =>
+            index === self.findIndex((t) => t.name === item.name),
+        );
+
+        if (!isEnd) {
+          const twoTeams = getRandomTwoTeams(teams, dataTriathlon);
+          setTimeout(() => {
+            const handleTeamSelect = teamSelect(
+              teams,
+              currentTeamsIndexes[currentPoolIndex],
+              buf,
+              currentPoolIndex,
+              setCurrentTeamsIndexes,
+              setFighterPairs,
+            );
+            if (twoTeams)
+              handleTeamSelect(
+                twoTeams[0].id,
+                "red",
+                undefined,
+                twoTeams[1].id,
+              );
+          }, 500);
+        }
+
+        return buf;
+      });
+
+      // 4. Обновляем пулы
+      setPools((state) =>
+        changeValueInStateArray(state, [...dataTriathlon[0]], poolIndex),
+      );
+
+      // 5. Сбрасываем дуэли
+      setDuels((state) =>
+        changeValueInStateArray(state, dataTriathlon, poolIndex),
+      );
+
+      // 6. Сбрасываем isPoolEnd
+      setIsPoolEnd((state) => changeValueInStateArray(state, isEnd, poolIndex));
+
+      // 7. Обновляем teamCount если нужно
+      if (teamCount) {
+        setTeamCount(teamCount);
+      }
+
+      setTournamentSystem(TournamentSystem.TRIATHLON);
+      setIsSaveParticipantsForPools(true);
+
+      Toast.show({
+        type: "success",
+        text1: t("fileImportSuccess"),
+      });
+      return;
+    } else {
+      // --- ОБЫЧНЫЙ РЕЖИМ ---
+      if (!data || data.length === 0) {
+        Toast.show({
+          type: "error",
+          text1: t("error"),
+        });
+        return;
+      }
+
       const stateHandlerWrap =
         (onlyFirst: boolean) =>
         (state: [ParticipantType, ParticipantType][][]) => {
@@ -616,11 +733,7 @@ export default function SettingsScreen() {
         buf[poolIndex] = stateHandlerWrap(false)(buf[poolIndex]);
         setIsPoolEnd((isEnds) => {
           const bufEnds = [...isEnds];
-          if (isPoolEndByDuels(buf, poolIndex)) {
-            bufEnds[poolIndex] = true;
-          } else {
-            bufEnds[poolIndex] = false;
-          }
+          bufEnds[poolIndex] = isPoolEndByDuels(buf[poolIndex]);
           return bufEnds;
         });
         return buf;
@@ -643,6 +756,11 @@ export default function SettingsScreen() {
         return buf;
       });
     }
+
+    Toast.show({
+      type: "success",
+      text1: t("fileImportSuccess"),
+    });
   };
 
   /* ---------- участники ---------- */
@@ -931,9 +1049,9 @@ export default function SettingsScreen() {
     if (isAddPoolIndex) setCurrentPoolIndex(currentPoolIndex + 1);
   };
 
-  const isArrowNext =
-    tournamentSystem === TournamentSystem.TRIATHLON &&
-    teams.length - 1 === currentPoolIndex;
+  const isTriathlon = tournamentSystem === TournamentSystem.TRIATHLON;
+
+  const isArrowNext = isTriathlon && teams.length - 1 === currentPoolIndex;
 
   useEffect(() => {
     if (isBellPlaying) {
@@ -1052,12 +1170,10 @@ export default function SettingsScreen() {
                 </Text>
                 {isPoolEnd[index] && <CheckCircle size={20} color="#4CAF50" />}
                 <Text style={styles.poolCardCount}>
-                  {(tournamentSystem === TournamentSystem.TRIATHLON
+                  {(isTriathlon
                     ? teams[index]?.length
                     : fighterPairs[index]?.length) || 0}{" "}
-                  {tournamentSystem === TournamentSystem.TRIATHLON
-                    ? t("teams")
-                    : t("pairs")}
+                  {isTriathlon ? t("teams") : t("pairs")}
                 </Text>
               </TouchableOpacity>
             )}
@@ -1072,7 +1188,7 @@ export default function SettingsScreen() {
             visible={true}
             onClose={() => setSelectedPoolModal(null)}
             poolIndex={selectedPoolModal}
-            pairs={fighterPairs[selectedPoolModal] || []}
+            pairs={pools[selectedPoolModal] || []}
             nominationId={
               poolsFromServer?.[selectedPoolModal]?.nominationId || nominationId
             }
@@ -1101,7 +1217,7 @@ export default function SettingsScreen() {
             </TouchableOpacity>
           </View>
 
-          {tournamentSystem === TournamentSystem.TRIATHLON && (
+          {(isTriathlon || isGroupBattle) && (
             <GenderSwitch
               gender={gender}
               setGender={setGender}
@@ -1180,7 +1296,7 @@ export default function SettingsScreen() {
             options={systems}
           />
 
-          {tournamentSystem !== TournamentSystem.TRIATHLON && (
+          {!isTriathlon && (
             <Switch
               title={t("groupBattles")}
               value={isGroupBattle}
@@ -1195,7 +1311,7 @@ export default function SettingsScreen() {
             title={t("saveParticipantsForPools")}
             value={isSaveParticipantsForPools}
             setValue={setIsSaveParticipantsForPools}
-            disabled={tournamentSystem === TournamentSystem.TRIATHLON}
+            disabled={isTriathlon}
           />
 
           <Switch
@@ -1204,7 +1320,7 @@ export default function SettingsScreen() {
             setValue={setIsReverseSides}
             titleStyle={{ maxWidth: 200 }}
           />
-          {tournamentSystem !== TournamentSystem.TRIATHLON && (
+          {!isTriathlon && (
             <>
               <Button
                 title={t("addNewPair")}
@@ -1236,7 +1352,7 @@ export default function SettingsScreen() {
         </Section>
 
         {/* Настройки для триатлона */}
-        {tournamentSystem === TournamentSystem.TRIATHLON && (
+        {isTriathlon && (
           <Section>
             <TriathlonWeaponsSettings />
 
@@ -1278,9 +1394,7 @@ export default function SettingsScreen() {
           }}
           onDragStateChange={setIsDragging}
           participants={participants}
-          teams={
-            tournamentSystem === TournamentSystem.TRIATHLON ? teams : undefined
-          }
+          teams={isTriathlon ? teams : undefined}
           manualMode
         />
 

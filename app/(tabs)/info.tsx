@@ -1,9 +1,12 @@
+import Button from "@/components/ui/Button";
 import Markdown from "@/components/ui/Markdown";
 import Section from "@/components/ui/Section";
 import { Colors, Fonts } from "@/constants";
 import { useApi } from "@/hooks/useApi";
+import { useUpdater } from "@/hooks/useUpdater";
 import { languageAtom } from "@/store";
 import { useAtomValue } from "jotai";
+import { Download } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -47,6 +50,13 @@ const TutorialEN = () => {
 
 export default function AppInfo() {
   const { t } = useTranslation();
+  const {
+    currentVersion,
+    releaseInfo,
+    updateAvailable,
+    downloading,
+    downloadAndInstall,
+  } = useUpdater();
   const lang = useAtomValue(languageAtom);
   const { api } = useApi();
   const [privacyPolicy, setPrivacyPolicy] = useState("");
@@ -64,9 +74,7 @@ export default function AppInfo() {
         const text = await response.json();
         setPrivacyPolicy(text);
       }
-    } catch (error) {
-      console.error("Error fetching privacy policy:", error);
-      setPrivacyPolicy(t("failedToLoadPolicy"));
+    } catch {
     } finally {
       setLoading(false);
     }
@@ -87,16 +95,28 @@ export default function AppInfo() {
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <SafeAreaView style={styles.content}>
         <Text style={styles.title}>{t("aboutApp")}</Text>
+        <Section title={`${t("version")}: ${currentVersion}`}>
+          {updateAvailable && !downloading && (
+            <Button onPress={downloadAndInstall}>
+              <Download size={28} color={Colors.fg} />
+              {releaseInfo?.version}
+            </Button>
+          )}
+        </Section>
 
         <Section title={t("manual")}>{renderTutorial()}</Section>
 
-        <Section>
-          {loading ? (
-            <ActivityIndicator size="large" color={Colors.accent} />
-          ) : (
-            <Markdown text={privacyPolicy} />
-          )}
-        </Section>
+        {privacyPolicy ? (
+          <Section>
+            {loading ? (
+              <ActivityIndicator size="large" color={Colors.accent} />
+            ) : (
+              <Markdown text={privacyPolicy} />
+            )}
+          </Section>
+        ) : (
+          <></>
+        )}
       </SafeAreaView>
     </ScrollView>
   );

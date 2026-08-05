@@ -1,5 +1,5 @@
 import { fighterDefault } from "@/store";
-import { ParticipantType, TeamType, TournamentSystem } from "@/typings";
+import { Gender, ParticipantType, TeamType, TournamentSystem } from "@/typings";
 
 export const generatePairs = (
   participants: ParticipantType[],
@@ -11,8 +11,10 @@ export const generatePairs = (
   setCurrentPairIndex: React.Dispatch<React.SetStateAction<number[]>>,
   currentRound?: number,
   totalRounds?: number,
+  fighterPairs?: [ParticipantType, ParticipantType][],
 ): [ParticipantType, ParticipantType][][] => {
   let pairs: [ParticipantType, ParticipantType][][] = [];
+  const isGroupBattle = fighterPairs !== undefined;
 
   /* ---------- ОЛИМПИЙСКАЯ ---------- */
   if (tournamentSystem === TournamentSystem.OLYMPIC) {
@@ -42,58 +44,320 @@ export const generatePairs = (
     let players = [[...participants]];
 
     players.forEach((group) => {
-      const used = new Set<string>();
-      const tempPairs: [ParticipantType, ParticipantType][] = [];
+      // Проверяем, есть ли у участников пол
+      const hasGender = group.some((p) => p.gender !== undefined);
 
-      for (let i = 0; i < group.length; i++) {
-        const p1 = group[i];
-        if (used.has(p1.id)) continue;
-        const candidates = [];
-        for (let j = i + 1; j < group.length; j++) {
-          if (!used.has(group[j].id)) candidates.push(j);
+      // Fisher-Yates shuffle
+      const shuffle = <T>(array: T[]): T[] => {
+        const result = [...array];
+        for (let i = result.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [result[i], result[j]] = [result[j], result[i]];
         }
-        // Fisher-Yates shuffle
-        const shuffle = <T>(array: T[]): T[] => {
-          const result = [...array];
-          for (let i = result.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [result[i], result[j]] = [result[j], result[i]];
-          }
-          return result;
-        };
-        const shuffledCandidates = shuffle(candidates);
-        // ищем первого подходящего соперника
-        let found = -1;
-        for (const j of shuffledCandidates) {
-          const p2 = group[j];
-          if (used.has(p2.id)) continue;
-          // не играли ли они уже?
-          const played =
-            p1.opponents?.includes(p2.id) || p2.opponents?.includes(p1.id);
-          if (!played) {
-            found = j;
-            break;
-          }
-        }
+        return result;
+      };
 
-        if (found !== -1) {
-          const p2 = group[found];
-          tempPairs.push([p1, p2]);
-          used.add(p1.id);
-          used.add(p2.id);
-        } else {
-          // не нашли пары – «пара с null»
-          tempPairs.push([
-            p1,
-            {
-              ...fighterDefault,
-            },
-          ]);
-          used.add(p1.id);
+      // Определяем команды на основе текущих пар
+      let team1Ids = new Set<string>();
+      let team2Ids = new Set<string>();
+
+      if (isGroupBattle && fighterPairs.length > 0) {
+        // Берем первую пару для определения команд
+        const firstPair = fighterPairs[0];
+        if (firstPair && firstPair[0] && firstPair[1]) {
+          // Все кто на позиции 0 - команда 1
+          fighterPairs.forEach((pair) => {
+            if (pair[0]) team1Ids.add(pair[0].id);
+            if (pair[1]) team2Ids.add(pair[1].id);
+          });
+        }
+      } else if (isGroupBattle) {
+        // Если нет пар, разделяем по половинам (fallback)
+        const sortedForTeams = [...group].sort((a, b) => {
+          const aOpponents = a.opponents?.length || 0;
+          const bOpponents = b.opponents?.length || 0;
+          return aOpponents - bOpponents;
+        });
+
+        const halfLength = Math.floor(sortedForTeams.length / 2);
+        for (let i = 0; i < halfLength; i++) {
+          team1Ids.add(sortedForTeams[i].id);
+        }
+        for (let i = halfLength; i < sortedForTeams.length; i++) {
+          team2Ids.add(sortedForTeams[i].id);
         }
       }
+
+      // Сортируем группу: сначала те, у кого меньше противников
+      const sortedGroup = [...group].sort((a, b) => {
+        const aOpponents = a.opponents?.length || 0;
+        const bOpponents = b.opponents?.length || 0;
+        return aOpponents - bOpponents;
+      });
+
+      // Разделяем по полу, если нужно
+      let malePlayers: ParticipantType[] = [];
+      let femalePlayers: ParticipantType[] = [];
+
+      if (hasGender) {
+        malePlayers = sortedGroup.filter((p) => p.gender === Gender.MALE);
+        femalePlayers = sortedGroup.filter((p) => p.gender === Gender.FEMALE);
+      }
+
+      // Функция для создания пар в группе
+      const createPairsInGroup = (
+        playerPool: ParticipantType[],
+        allowMixed: boolean = false,
+        otherGenderPool: ParticipantType[] = [],
+      ): [ParticipantType, ParticipantType][] => {
+        const used = new Set<string>();
+        const pairs: [ParticipantType, ParticipantType][] = [];
+
+        if (isGroupBattle) {
+          // Разделяем игроков на команды
+          const team1Players = playerPool.filter((p) => team1Ids.has(p.id));
+          const team2Players = playerPool.filter((p) => team2Ids.has(p.id));
+
+          // Перемешиваем игроков в каждой команде
+          const shuffledTeam1 = shuffle([...team1Players]);
+          const shuffledTeam2 = shuffle([...team2Players]);
+
+          // Создаем пары: каждый из team1 с каждым из team2
+          for (const p1 of shuffledTeam1) {
+            if (used.has(p1.id)) continue;
+
+            let partner: ParticipantType | null = null;
+            const shuffledTeam2Copy = shuffle([...shuffledTeam2]);
+
+            for (const p2 of shuffledTeam2Copy) {
+              if (used.has(p2.id)) continue;
+
+              // Проверяем, не играли ли они уже
+              const played =
+                p1.opponents?.includes(p2.id) || p2.opponents?.includes(p1.id);
+              if (!played) {
+                partner = p2;
+                break;
+              }
+            }
+
+            if (partner) {
+              pairs.push([p1, partner]);
+              used.add(p1.id);
+              used.add(partner.id);
+            } else {
+              // Если не нашли пару в своей команде и разрешены смешанные пары
+              if (allowMixed && otherGenderPool.length > 0) {
+                const otherGenderAvailable = otherGenderPool.filter(
+                  (p) => !used.has(p.id) && p.id !== p1.id,
+                );
+
+                const shuffledOther = shuffle([...otherGenderAvailable]);
+                let mixedPartner: ParticipantType | null = null;
+
+                for (const p2 of shuffledOther) {
+                  const played =
+                    p1.opponents?.includes(p2.id) ||
+                    p2.opponents?.includes(p1.id);
+                  if (!played) {
+                    mixedPartner = p2;
+                    break;
+                  }
+                }
+
+                if (mixedPartner) {
+                  pairs.push([p1, mixedPartner]);
+                  used.add(p1.id);
+                  used.add(mixedPartner.id);
+                } else {
+                  pairs.push([
+                    p1,
+                    {
+                      ...fighterDefault,
+                    },
+                  ]);
+                  used.add(p1.id);
+                }
+              } else {
+                pairs.push([
+                  p1,
+                  {
+                    ...fighterDefault,
+                  },
+                ]);
+                used.add(p1.id);
+              }
+            }
+          }
+
+          // Проверяем, остались ли игроки из team2 без пары
+          const usedInPairs = new Set<string>();
+          pairs.forEach((pair) => {
+            usedInPairs.add(pair[0].id);
+            if (pair[1].id) usedInPairs.add(pair[1].id);
+          });
+
+          const remainingTeam2 = shuffledTeam2.filter(
+            (p) => !usedInPairs.has(p.id),
+          );
+
+          // Для оставшихся игроков team2 создаем пары с пустым соперником
+          remainingTeam2.forEach((p) => {
+            pairs.push([
+              {
+                ...fighterDefault,
+              },
+              p,
+            ]);
+          });
+        } else {
+          // Обычный режим без группового боя
+          const poolUsed = new Set<string>();
+
+          for (const p1 of playerPool) {
+            if (poolUsed.has(p1.id)) continue;
+
+            let available = playerPool.filter(
+              (p) => !poolUsed.has(p.id) && p.id !== p1.id,
+            );
+
+            const shuffled = shuffle(available);
+            let partner: ParticipantType | null = null;
+
+            for (const p2 of shuffled) {
+              const played =
+                p1.opponents?.includes(p2.id) || p2.opponents?.includes(p1.id);
+              if (!played) {
+                partner = p2;
+                break;
+              }
+            }
+
+            if (partner) {
+              pairs.push([p1, partner]);
+              poolUsed.add(p1.id);
+              poolUsed.add(partner.id);
+            } else {
+              // Если не нашли пару и разрешены смешанные пары
+              if (allowMixed && otherGenderPool.length > 0) {
+                const otherGenderAvailable = otherGenderPool.filter(
+                  (p) => !poolUsed.has(p.id) && p.id !== p1.id,
+                );
+
+                const shuffledOther = shuffle([...otherGenderAvailable]);
+                let mixedPartner: ParticipantType | null = null;
+
+                for (const p2 of shuffledOther) {
+                  const played =
+                    p1.opponents?.includes(p2.id) ||
+                    p2.opponents?.includes(p1.id);
+                  if (!played) {
+                    mixedPartner = p2;
+                    break;
+                  }
+                }
+
+                if (mixedPartner) {
+                  pairs.push([p1, mixedPartner]);
+                  poolUsed.add(p1.id);
+                  poolUsed.add(mixedPartner.id);
+                } else {
+                  pairs.push([
+                    p1,
+                    {
+                      ...fighterDefault,
+                    },
+                  ]);
+                  poolUsed.add(p1.id);
+                }
+              } else {
+                pairs.push([
+                  p1,
+                  {
+                    ...fighterDefault,
+                  },
+                ]);
+                poolUsed.add(p1.id);
+              }
+            }
+          }
+        }
+
+        return pairs;
+      };
+
+      let resultPairs: [ParticipantType, ParticipantType][] = [];
+
+      if (hasGender) {
+        // 1. Создаем пары внутри мужской группы
+        const malePairs = createPairsInGroup(malePlayers, false);
+        resultPairs.push(...malePairs);
+
+        // 2. Создаем пары внутри женской группы
+        const femalePairs = createPairsInGroup(femalePlayers, false);
+        resultPairs.push(...femalePairs);
+
+        // 3. Проверяем, остались ли игроки без пар
+        const usedInPairs = new Set<string>();
+        resultPairs.forEach((pair) => {
+          usedInPairs.add(pair[0].id);
+          if (pair[1].id) usedInPairs.add(pair[1].id);
+        });
+
+        const remainingMale = malePlayers.filter((p) => !usedInPairs.has(p.id));
+        const remainingFemale = femalePlayers.filter(
+          (p) => !usedInPairs.has(p.id),
+        );
+
+        // 4. Если остались игроки, создаем смешанные пары
+        if (remainingMale.length > 0 || remainingFemale.length > 0) {
+          const allRemaining = [...remainingMale, ...remainingFemale];
+
+          const mixedPairs = createPairsInGroup(
+            allRemaining,
+            true,
+            allRemaining,
+          );
+
+          mixedPairs.forEach((pair) => {
+            if (pair[1].id && pair[1].name && pair[1].name !== "—") {
+              // При групповом бое проверяем, что позиции сохраняются
+              if (isGroupBattle) {
+                const p1 = pair[0];
+                const p2 = pair[1];
+                // Если p1 из team2, а p2 из team1 - меняем местами
+                if (
+                  p1.id &&
+                  team2Ids.has(p1.id) &&
+                  p2.id &&
+                  team1Ids.has(p2.id)
+                ) {
+                  resultPairs.push([p2, p1]);
+                } else {
+                  resultPairs.push(pair);
+                }
+              } else {
+                resultPairs.push(pair);
+              }
+            } else {
+              if (pair[0].id) {
+                resultPairs.push([
+                  pair[0],
+                  {
+                    ...fighterDefault,
+                  },
+                ]);
+              }
+            }
+          });
+        }
+      } else {
+        // Без учета пола
+        resultPairs = createPairsInGroup(sortedGroup, false);
+      }
+
       if (!pairs[poolIndex]) pairs[poolIndex] = [];
-      pairs[poolIndex].push(...tempPairs);
+      pairs[poolIndex].push(...resultPairs);
     });
   } else if (
     tournamentSystem === TournamentSystem.SWISS &&

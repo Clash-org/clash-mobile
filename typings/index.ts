@@ -398,3 +398,38 @@ export type PaymentType = {
 };
 
 export type SoundsType = "bell";
+
+export interface ReleaseInfo {
+  version: string;
+  apkUrl: string;
+  releaseNotes?: string;
+  publishedAt: string;
+  size?: number;
+}
+
+export interface GitHubRelease {
+  tag_name: string;
+  assets: {
+    name: string;
+    browser_download_url: string;
+    size: number;
+  }[];
+  body?: string;
+  published_at: string;
+}
+
+export enum UpdateStatus {
+  CHECKING = "checking",
+  AVAILABLE = "available",
+  DOWNLOADING = "downloading",
+  DOWNLOADED = "downloaded",
+  INSTALLING = "installing",
+  ERROR = "error",
+  UP_TO_DATE = "up_to_date",
+}
+
+export type DownloadProgress = {
+  bytesWritten: number;
+  contentLength: number;
+  progress: number;
+};

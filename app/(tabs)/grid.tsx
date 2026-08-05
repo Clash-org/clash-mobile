@@ -317,6 +317,7 @@ export default function TournamentGridScreen() {
           setCurrentPairIndex,
           currentRound[currentPoolIndex],
           totalRounds[currentPoolIndex],
+          isGroupBattle ? fighterPairs[currentPoolIndex] : undefined,
         );
 
         if (tournamentSystem === TournamentSystem.SWISS)
@@ -475,7 +476,7 @@ export default function TournamentGridScreen() {
           teams[currentPoolIndex],
           duels[currentPoolIndex],
         )
-      : !isPoolEndByDuels(duels, currentPoolIndex);
+      : !isPoolEndByDuels(duels[currentPoolIndex]);
   const sections = [
     ...(isPoolInProgress &&
     fighterPairs[currentPoolIndex]?.filter((p) => p.length).length
@@ -520,6 +521,7 @@ export default function TournamentGridScreen() {
 
       {/* Победители */}
       {!!winners.length &&
+        isEnd[currentPoolIndex] &&
         !isGroupBattle &&
         tournamentSystem !== TournamentSystem.HYBRID && (
           <View style={styles.winnersContainer}>
@@ -554,6 +556,7 @@ export default function TournamentGridScreen() {
 
       {/* Победитель группового этапа */}
       {!!winners.length &&
+        isEnd[currentPoolIndex] &&
         isGroupBattle &&
         tournamentSystem !== TournamentSystem.HYBRID && (
           <View style={styles.groupWinnerContainer}>

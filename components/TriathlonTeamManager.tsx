@@ -17,6 +17,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import Button from "./ui/Button";
@@ -26,7 +27,9 @@ import Select from "./ui/Select";
 
 type Props = {
   participants: ParticipantType[][];
-  setFighterPairs: (newPairs: [ParticipantType, ParticipantType][][]) => void;
+  setFighterPairs: React.Dispatch<
+    React.SetStateAction<[ParticipantType, ParticipantType][][]>
+  >;
   addPool: () => void;
   setDuels: React.Dispatch<
     React.SetStateAction<[ParticipantType, ParticipantType][][][]>
@@ -42,6 +45,8 @@ export function TriathlonTeamManager({
   setIsPoolEnd,
 }: Props) {
   const { t } = useTranslation();
+  const { width } = useWindowDimensions();
+  const isSmallScreen = width < 350;
   const [teamCount] = useAtom(teamCountAtom);
   const [teamsOrigin, setTeams] = useAtom(teamsAtom);
   const [currentPoolIndex] = useAtom(currentPoolIndexAtom);
@@ -317,16 +322,20 @@ export function TriathlonTeamManager({
             onPress={randomizeTeams}
           >
             <Shuffle size={20} color={Colors.fg} />
-            <Text style={styles.headerButtonText}>{t("randomize")}</Text>
+            {!isSmallScreen && (
+              <Text style={styles.headerButtonText}>{t("randomize")}</Text>
+            )}
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.headerButton, styles.addButton]}
             onPress={() => setShowTeamModal(true)}
           >
             <Plus size={20} color={Colors.fg} />
-            <Text style={[styles.headerButtonText, { color: Colors.fg }]}>
-              {t("add")}
-            </Text>
+            {!isSmallScreen && (
+              <Text style={[styles.headerButtonText, { color: Colors.fg }]}>
+                {t("add")}
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
       </View>
