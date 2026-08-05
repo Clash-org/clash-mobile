@@ -24,6 +24,10 @@ const TutorialRU = () => {
     "https://vkvideo.ru/video_ext.php?oid=-231799221&id=456239017&hash=e9a0190bee125ebd",
     "https://vkvideo.ru/video_ext.php?oid=-231799221&id=456239020&hash=c5535dd9189748e4",
     "https://vkvideo.ru/video_ext.php?oid=-231799221&id=456239023&hash=fa1689aa98fe192b",
+    "https://vkvideo.ru/video_ext.php?oid=-231799221&id=456239025&hash=f608677885f25c4f",
+    "https://vkvideo.ru/video_ext.php?oid=-231799221&id=456239026&hash=958101736e2d6688",
+    "https://vkvideo.ru/video_ext.php?oid=-231799221&id=456239027&hash=1197157326a72153",
+    "https://vkvideo.ru/video_ext.php?oid=-231799221&id=456239029&hash=72998a16b0b08686",
   ];
 
   return (
