@@ -11,6 +11,8 @@ import Toast from "react-native-toast-message";
 import * as XLSX from "xlsx-js-style";
 import { generateId } from "./helpers";
 
+type ParticipantTypeWithTeamId = ParticipantType & { teamId: number };
+
 export type ImportResult = {
   // Данные боев
   dataTriathlon: [ParticipantType, ParticipantType][][];
@@ -150,7 +152,6 @@ export async function importExcel(): Promise<ImportResult | null> {
     } else {
       let participants: SliceParticipantType[] = [];
       const pairs: SliceParticipantType[][] = [];
-      const namesIds: { [key: string]: string } = {};
       const processedNames = new Set<string>();
 
       workbook.SheetNames.forEach((sheetName) => {
@@ -235,8 +236,6 @@ export async function importExcel(): Promise<ImportResult | null> {
     return null;
   }
 }
-
-type ParticipantTypeWithTeamId = ParticipantType & { teamId: number };
 
 /**
  * Парсит пары бойцов из данных листа
@@ -350,10 +349,10 @@ function parseFighterPairs(
 function parseGender(genderStr?: string): Gender | undefined {
   if (!genderStr) return undefined;
   const lower = genderStr.toLowerCase();
-  if (lower.includes("woman") || lower.includes("жен")) {
+  if (lower.includes("woman")) {
     return Gender.FEMALE;
   }
-  if (lower.includes("man") || lower.includes("муж")) {
+  if (lower.includes("man")) {
     return Gender.MALE;
   }
   return undefined;

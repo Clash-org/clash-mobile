@@ -129,7 +129,6 @@ export function useUpdater(
 
       // Для Android - устанавливаем APK
       const installed = await UpdateService.installAPK(filePath);
-
       if (installed) {
         setStatus(UpdateStatus.DOWNLOADED);
         onUpdateInstalled?.();

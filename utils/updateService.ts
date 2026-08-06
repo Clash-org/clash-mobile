@@ -5,9 +5,9 @@ import {
   UpdateStatus,
 } from "@/typings";
 import * as Device from "expo-device";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as IntentLauncher from "expo-intent-launcher";
-import { Alert, Linking, Platform } from "react-native";
+import { Platform } from "react-native";
 
 const GITHUB_API_URL =
   "https://api.github.com/repos/Clash-org/clash-mobile/releases/latest";
@@ -111,14 +111,45 @@ class UpdateService {
   }
 
   /**
+   * Проверка существования и получение информации о файле
+   */
+  private async getFileInfo(filePath: string): Promise<{
+    exists: boolean;
+    size?: number;
+    uri?: string;
+    modificationTime?: number;
+  }> {
+    try {
+      // Используем getInfoAsync из легаси API
+      const fileInfo = await FileSystem.getInfoAsync(filePath);
+
+      // Проверяем существование
+      if (!fileInfo || !fileInfo.exists) {
+        return { exists: false };
+      }
+
+      // Возвращаем информацию
+      return {
+        exists: true,
+        size: fileInfo.size ?? 0, // Используем ?? на случай undefined
+        uri: fileInfo.uri || filePath,
+        modificationTime: fileInfo.modificationTime,
+      };
+    } catch (error) {
+      console.error("❌ Ошибка получения информации о файле:", error);
+      return { exists: false };
+    }
+  }
+
+  /**
    * Получение пути для сохранения APK
    */
   private getDownloadPath(): string {
-    // Используем Paths.document для получения document directory
-    const documentDir = FileSystem.Paths.document.uri;
-    // Убираем file:// префикс если есть
-    const cleanPath = documentDir.replace(/^file:\/\//, "");
-    return `${cleanPath}updates/`;
+    // Используем documentDirectory из легаси API
+    if (!FileSystem.documentDirectory) {
+      throw new Error("documentDirectory is null");
+    }
+    return FileSystem.documentDirectory;
   }
 
   /**
@@ -130,22 +161,13 @@ class UpdateService {
   ): Promise<string> {
     try {
       this.currentStatus = UpdateStatus.DOWNLOADING;
-      this.abortController = new AbortController();
 
-      // Получаем путь для сохранения
-      const downloadDir = this.getDownloadPath();
-
-      // Создаем директорию используя Directory API
-      const dir = new FileSystem.Directory(downloadDir);
-      if (!dir.exists) {
-        dir.create({ intermediates: true });
-      }
+      const documentDir = this.getDownloadPath();
 
       const fileName = `app_update_${Date.now()}.apk`;
-      const filePath = downloadDir + fileName;
+      const filePath = documentDir + fileName;
 
-      // Используем легаси API для скачивания
-      // @ts-ignore - createDownloadResumable доступен в легаси API
+      // Используем createDownloadResumable из легаси API
       const downloadResumable = FileSystem.createDownloadResumable(
         apkUrl,
         filePath,
@@ -170,7 +192,6 @@ class UpdateService {
 
       this.downloadResumable = downloadResumable;
 
-      // Запускаем загрузку
       const result = await downloadResumable.downloadAsync();
 
       if (!result) {
@@ -178,14 +199,18 @@ class UpdateService {
       }
 
       this.currentStatus = UpdateStatus.DOWNLOADED;
-      return result.uri;
-    } catch (error: any) {
-      if (error.name === "AbortError") {
-        console.error("Загрузка отменена");
-        this.currentStatus = UpdateStatus.UP_TO_DATE;
-      } else {
-        this.currentStatus = UpdateStatus.ERROR;
+
+      // Проверяем, что файл существует
+      const fileInfo = await this.getFileInfo(result.uri);
+
+      if (!fileInfo.exists) {
+        throw new Error("Файл не существует после скачивания");
       }
+
+      return result.uri;
+    } catch (error) {
+      this.currentStatus = UpdateStatus.ERROR;
+      console.error("❌ Ошибка скачивания:", error);
       throw error;
     }
   }
@@ -201,22 +226,21 @@ class UpdateService {
 
       this.currentStatus = UpdateStatus.INSTALLING;
 
-      // Проверяем существование файла используя File API
-      const file = new FileSystem.File(filePath);
-      if (!file.exists) {
+      // Проверяем существование файла
+      const fileInfo = await this.getFileInfo(filePath);
+
+      if (!fileInfo.exists) {
         throw new Error("APK файл не найден");
       }
 
       // Получаем content URI для Android 7+
-      // Используем getContentUriAsync из легаси API
-      // @ts-ignore
       const contentUri = await FileSystem.getContentUriAsync(filePath);
 
       if (!contentUri) {
         throw new Error("Не удалось получить content URI");
       }
 
-      // Используем IntentLauncher для открытия установщика
+      // Открываем установщик
       const result = await IntentLauncher.startActivityAsync(
         "android.intent.action.VIEW",
         {
@@ -233,34 +257,9 @@ class UpdateService {
       return true;
     } catch (error) {
       this.currentStatus = UpdateStatus.ERROR;
-      console.error("Ошибка установки:", error);
-
-      // Показываем инструкцию для ручной установки
-      await this.showManualInstallPrompt(filePath);
+      console.error("❌ Ошибка установки:", error);
       return false;
     }
-  }
-
-  /**
-   * Показ инструкции для ручной установки
-   */
-  private async showManualInstallPrompt(filePath: string): Promise<void> {
-    const fileName = filePath.split("/").pop() || "update.apk";
-
-    Alert.alert(
-      "Установка APK",
-      `Файл обновления сохранен: ${fileName}\n\nПожалуйста, установите его вручную через файловый менеджер.\n\nПуть: ${filePath}`,
-      [
-        { text: "OK" },
-        {
-          text: "Открыть папку",
-          onPress: () => {
-            const folder = filePath.substring(0, filePath.lastIndexOf("/"));
-            Linking.openURL(`file://${folder}`);
-          },
-        },
-      ],
-    );
   }
 
   /**
@@ -268,32 +267,31 @@ class UpdateService {
    */
   async cleanOldAPK(): Promise<void> {
     try {
-      const downloadDir = this.getDownloadPath();
-      const dir = new FileSystem.Directory(downloadDir);
+      const documentDir = this.getDownloadPath();
 
-      if (dir.exists) {
-        const contents = dir.list();
-        const apkFiles = contents
-          .filter(
-            (item) =>
-              item instanceof FileSystem.File && item.name.endsWith(".apk"),
-          )
-          .sort((a, b) => {
-            const aTime = (a as FileSystem.File).creationTime || 0;
-            const bTime = (b as FileSystem.File).creationTime || 0;
-            return aTime - bTime;
-          });
+      // Получаем список файлов в директории
+      const files = await FileSystem.readDirectoryAsync(documentDir);
 
-        // Удаляем все APK, кроме последних 2
-        const filesToDelete = apkFiles.slice(0, -2);
-        for (const file of filesToDelete) {
-          if (file.exists) {
-            file.delete();
-          }
+      // Фильтруем только APK файлы
+      const apkFiles = files.filter((name) => name.endsWith(".apk")).sort(); // Сортируем по имени (включает timestamp)
+
+      if (apkFiles.length <= 2) {
+        return;
+      }
+
+      // Удаляем все APK, кроме последних 2
+      const filesToDelete = apkFiles.slice(0, -2);
+
+      for (const fileName of filesToDelete) {
+        const filePath = documentDir + fileName;
+
+        const fileInfo = await FileSystem.getInfoAsync(filePath);
+        if (fileInfo.exists) {
+          await FileSystem.deleteAsync(filePath);
         }
       }
     } catch (error) {
-      console.error("Ошибка очистки:", error);
+      console.error("❌ Ошибка очистки:", error);
     }
   }
 

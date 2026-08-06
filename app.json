@@ -40,7 +40,14 @@
         }
       ],
       "expo-localization",
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-file-system",
+        {
+          "supportsOpeningDocumentsInPlace": true,
+          "enableFileSharing": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

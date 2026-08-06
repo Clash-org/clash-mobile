@@ -60,6 +60,7 @@ export default function AppInfo() {
     updateAvailable,
     downloading,
     downloadAndInstall,
+    downloadProgress,
   } = useUpdater();
   const lang = useAtomValue(languageAtom);
   const { api } = useApi();
@@ -106,8 +107,10 @@ export default function AppInfo() {
               {releaseInfo?.version}
             </Button>
           )}
+          {downloading && (
+            <Text style={styles.progress}>{Math.round(downloadProgress)}%</Text>
+          )}
         </Section>
-
         <Section title={t("manual")}>{renderTutorial()}</Section>
 
         {privacyPolicy ? (
@@ -178,5 +181,11 @@ const styles = StyleSheet.create({
   video: {
     flex: 1,
     width: "100%",
+  },
+  progress: {
+    fontFamily: Fonts.bold,
+    color: Colors.accent,
+    textAlign: "center",
+    fontSize: 25,
   },
 });
