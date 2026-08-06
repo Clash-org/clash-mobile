@@ -4,6 +4,7 @@ import {
   ReleaseInfo,
   UpdateStatus,
 } from "@/typings";
+import Constants from "expo-constants";
 import * as Device from "expo-device";
 import * as FileSystem from "expo-file-system/legacy";
 import * as IntentLauncher from "expo-intent-launcher";
@@ -241,13 +242,16 @@ class UpdateService {
       }
       // Открываем установщик
       const result = await IntentLauncher.startActivityAsync(
-        "android.intent.action.VIEW",
+        "android.intent.action.INSTALL_PACKAGE",
         {
           data: contentUri,
           type: "application/vnd.android.package-archive",
           flags: 1 | 268435456, // FLAG_GRANT_READ_URI_PERMISSION + NEW_TASK
           extra: {
             "android.intent.extra.RETURN_RESULT": true,
+            "android.intent.extra.INSTALLER_PACKAGE_NAME":
+              Constants.expoConfig?.android?.package,
+            "android.intent.extra.NOT_UNKNOWN_SOURCE": false,
           },
         },
       );
