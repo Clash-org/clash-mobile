@@ -239,14 +239,16 @@ class UpdateService {
       if (!contentUri) {
         throw new Error("Не удалось получить content URI");
       }
-
       // Открываем установщик
       const result = await IntentLauncher.startActivityAsync(
         "android.intent.action.VIEW",
         {
           data: contentUri,
           type: "application/vnd.android.package-archive",
-          flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
+          flags: 1 | 268435456, // FLAG_GRANT_READ_URI_PERMISSION + NEW_TASK
+          extra: {
+            "android.intent.extra.RETURN_RESULT": true,
+          },
         },
       );
 
