@@ -316,5 +316,6 @@
   "randomize": "Randomize",
   "poolSettings": "Pool settings",
   "enterWeaponName": "Enter weapon name",
-  "arena": "Arena"
+  "arena": "Arena",
+  "profile": "Profile"
 }

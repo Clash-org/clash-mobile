@@ -316,5 +316,6 @@
   "randomize": "Рандомно",
   "poolSettings": "Настройки пула",
   "enterWeaponName": "Введите название оружия",
-  "arena": "Площадка"
+  "arena": "Площадка",
+  "profile": "Профиль"
 }
