@@ -88,10 +88,6 @@ export function isPoolEndByTeams(
   teamsData: TeamType[],
 ) {
   try {
-    if (!teamsData || teamsData.length === 0) {
-      return false;
-    }
-
     // Создаем карту участников по ID для быстрого доступа
     const fencersMap = new Map<string, ParticipantType>();
     poolDuels.forEach((round) => {
@@ -117,22 +113,8 @@ export function isPoolEndByTeams(
       teamMembersCounts.push(membersCount);
     });
 
-    // Проверяем, что во всех командах одинаковое количество участников
-    const allSameCount = teamMembersCounts.every(
-      (count) => count === teamMembersCounts[0],
-    );
-
-    if (!allSameCount) {
-      return false;
-    }
-
     const teamsCount = teamsData.length;
     const membersPerTeam = teamMembersCounts[0] || 0;
-
-    // Если нет участников
-    if (membersPerTeam === 0) {
-      return false;
-    }
 
     // Количество матчей, которое должно быть в круге
     // Формула: (количество команд * (количество команд - 1)) / 2 * количество участников в команде

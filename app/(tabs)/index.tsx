@@ -584,14 +584,22 @@ export default function SettingsScreen() {
             );
             if (matchParticipant)
               return {
-                ...p,
+                ...fighterDefault,
+                name: p.name,
                 id: matchParticipant.id,
               };
 
-            return p;
+            return { ...fighterDefault, name: p.name, id: p.id };
           });
         }
-        buf[poolIndex] = [...buf[poolIndex], ...allParticipants].filter(
+        buf[poolIndex] = [
+          ...buf[poolIndex],
+          ...allParticipants.map((p) => ({
+            ...fighterDefault,
+            name: p.name,
+            id: p.id,
+          })),
+        ].filter(
           (item, index, self) =>
             index === self.findIndex((t) => t.name === item.name),
         );
