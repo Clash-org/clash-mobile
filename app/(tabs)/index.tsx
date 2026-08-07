@@ -54,6 +54,7 @@ import {
   generateId,
   getName,
   isPoolEndByDuels,
+  isPoolEndByTeams,
   teamSelect,
 } from "@/utils/helpers";
 import { importExcel } from "@/utils/importExcel";
@@ -125,7 +126,6 @@ import {
 import {
   assignInitialArenas,
   getRecommendedRounds,
-  isAllTeamsPairsPlayedFromDuels,
 } from "@/utils/matchesHandlers";
 import { ethers } from "ethers";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -556,7 +556,7 @@ export default function SettingsScreen() {
         return;
       }
 
-      const isEnd = isAllTeamsPairsPlayedFromDuels(teams, dataTriathlon);
+      const isEnd = isPoolEndByTeams(dataTriathlon, teams);
 
       // 1. Устанавливаем команды
       setTeams((state) => changeValueInStateArray(state, teams, poolIndex));

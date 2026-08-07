@@ -83,6 +83,79 @@ export function isPoolEndByDuels(poolDuels: ParticipantType[][][]) {
   }
 }
 
+export function isPoolEndByTeams(
+  poolDuels: ParticipantType[][][],
+  teamsData: TeamType[],
+) {
+  try {
+    if (!teamsData || teamsData.length === 0) {
+      return false;
+    }
+
+    // Создаем карту участников по ID для быстрого доступа
+    const fencersMap = new Map<string, ParticipantType>();
+    poolDuels.forEach((round) => {
+      round.forEach((pair) => {
+        pair.forEach((fencer) => {
+          if (fencer.name !== "—") {
+            fencersMap.set(fencer.id, fencer);
+          }
+        });
+      });
+    });
+
+    // Проверяем, что все участники команд присутствуют в боях
+    const teamMembersCounts: number[] = [];
+
+    teamsData.forEach((team) => {
+      let membersCount = 0;
+      team.members.forEach((memberId) => {
+        if (fencersMap.has(memberId)) {
+          membersCount++;
+        }
+      });
+      teamMembersCounts.push(membersCount);
+    });
+
+    // Проверяем, что во всех командах одинаковое количество участников
+    const allSameCount = teamMembersCounts.every(
+      (count) => count === teamMembersCounts[0],
+    );
+
+    if (!allSameCount) {
+      return false;
+    }
+
+    const teamsCount = teamsData.length;
+    const membersPerTeam = teamMembersCounts[0] || 0;
+
+    // Если нет участников
+    if (membersPerTeam === 0) {
+      return false;
+    }
+
+    // Количество матчей, которое должно быть в круге
+    // Формула: (количество команд * (количество команд - 1)) / 2 * количество участников в команде
+    const matchesMustBe =
+      ((teamsCount * (teamsCount - 1)) / 2) * membersPerTeam;
+
+    // Подсчитываем реальное количество проведенных матчей (боев)
+    const matchesCount = poolDuels.reduce((sum, round) => {
+      return (
+        round.filter((pair) => {
+          const leftExists = pair[0]?.name && pair[0].name !== "—";
+          const rightExists = pair[1]?.name && pair[1].name !== "—";
+          return leftExists && rightExists;
+        }).length + sum
+      );
+    }, 0);
+
+    return matchesCount === matchesMustBe;
+  } catch {
+    return false;
+  }
+}
+
 export function formatDate(
   dateString: string,
   lang: LangType,
