@@ -67,6 +67,7 @@ import {
   createMatches,
   getMatchesFromDuels,
   isPoolEndByDuels,
+  isPoolEndByTeams,
   teamSelect,
   truncate,
 } from "@/utils/helpers";
@@ -77,8 +78,7 @@ import {
   getTopThreeFighters,
   getTriathlonWinnersFromDuels,
   getWinnersRobin,
-  getWinnersSwiss,
-  isAllTeamsPairsPlayedFromDuels,
+  getWinnersSwiss
 } from "@/utils/matchesHandlers";
 import Toast from "react-native-toast-message";
 
@@ -472,10 +472,7 @@ export default function TournamentGridScreen() {
 
   const isPoolInProgress =
     tournamentSystem === TournamentSystem.TRIATHLON
-      ? !isAllTeamsPairsPlayedFromDuels(
-          teams[currentPoolIndex],
-          duels[currentPoolIndex],
-        )
+      ? !isPoolEndByTeams(duels[currentPoolIndex], teams[currentPoolIndex])
       : !isPoolEndByDuels(duels[currentPoolIndex]);
   const sections = [
     ...(isPoolInProgress &&

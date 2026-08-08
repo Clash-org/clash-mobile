@@ -78,7 +78,7 @@ export function isPoolEndByDuels(poolDuels: ParticipantType[][][]) {
       0,
     );
     return battlesCount === battlesCountMustBe;
-  } catch (e) {
+  } catch {
     return false;
   }
 }

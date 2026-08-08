@@ -602,61 +602,6 @@ export function getTriathlonTeamStats(
   });
 }
 
-/**
- * Проверяет, все ли пары команд сыграны (на основе дуэлей)
- * @param teams - массив команд
- * @param poolDuels - массив дуэлей в пуле
- * @returns true если все пары сыграны
- */
-export function isAllTeamsPairsPlayedFromDuels(
-  teams: TeamType[],
-  poolDuels: ParticipantType[][][],
-): boolean {
-  try {
-    // Фильтруем активные команды
-    const activeTeams = teams.filter((t) => !t.deactive);
-
-    if (activeTeams.length < 2) {
-      return true;
-    }
-
-    // Собираем все сыгранные пары из дуэлей
-    const playedPairs = new Set<string>();
-
-    poolDuels.forEach((matchPairs) => {
-      let team1Id: number | null = null;
-      let team2Id: number | null = null;
-
-      matchPairs.forEach((pair) => {
-        const fencer1 = pair[0];
-        const fencer2 = pair[1];
-
-        // Находим команды по участникам
-        const team1 = activeTeams.find((t) => t.members.includes(fencer1.id));
-        const team2 = activeTeams.find((t) => t.members.includes(fencer2.id));
-
-        if (team1 && team2) {
-          if (team1Id === null) team1Id = team1.id;
-          if (team2Id === null) team2Id = team2.id;
-        }
-      });
-
-      if (team1Id !== null && team2Id !== null) {
-        const pairKey = [team1Id, team2Id].sort((a, b) => a - b).join("-");
-        playedPairs.add(pairKey);
-      }
-    });
-
-    // Вычисляем общее количество возможных пар
-    const totalPossiblePairs =
-      (activeTeams.length * (activeTeams.length - 1)) / 2;
-
-    return playedPairs.size >= totalPossiblePairs;
-  } catch (e) {
-    return false;
-  }
-}
-
 // --------------------------------------------------------------------------
 
 /**
