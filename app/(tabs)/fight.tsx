@@ -773,7 +773,7 @@ const styles = StyleSheet.create({
   },
   side: {
     flex: 1,
-    paddingTop: 55,
+    paddingTop: 40,
     alignItems: "center",
   },
   reverse: {
