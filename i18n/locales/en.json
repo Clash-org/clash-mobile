@@ -317,5 +317,30 @@
   "poolSettings": "Pool settings",
   "enterWeaponName": "Enter weapon name",
   "arena": "Arena",
-  "profile": "Profile"
+  "profile": "Profile",
+  "videoRecorder": {
+    "ready": "Ready",
+    "start": "Start Recording",
+    "permissions": {
+      "title": "Permissions",
+      "camera": "Camera access is required to record video",
+      "cameraDenied": "No camera access",
+      "microphone": "Microphone access is required to record audio",
+      "media": "Gallery access is required to save video",
+      "mediaDenied": "No gallery access",
+      "error": "Failed to get permissions",
+      "stepCamera": "📷 Step 1: Camera Access",
+      "stepMicrophone": "🎤 Step 2: Microphone Access",
+      "stepMedia": "🖼️ Step 3: Gallery Access",
+      "allowCamera": "Allow Camera Access",
+      "allowMicrophone": "Allow Microphone Access",
+      "allowMedia": "Allow Gallery Access"
+    },
+    "errors": {
+      "recording": "Failed to record video",
+      "stop": "Failed to stop recording",
+      "camera": "Camera issue"
+    }
+  },
+  "recordVideoTimerStart": "Record video when the timer starts"
 }

@@ -91,6 +91,7 @@ import {
   isGroupBattleAtom,
   isPoolEndAtom,
   isPoolRatingAtom,
+  isRecordVideoTimerStartAtom,
   isReverseSidesAtom,
   isSaveParticipantsForPoolsAtom,
   isSoundsAtom,
@@ -253,6 +254,9 @@ export default function SettingsScreen() {
     currentTeamsIndexesAtom,
   );
   const [isGroupBattle, setIsGroupBattle] = useAtom(isGroupBattleAtom);
+  const [isRecordVideoTimerStart, setIsRecordVideoTimerStart] = useAtom(
+    isRecordVideoTimerStartAtom,
+  );
   const [isReverseSides, setIsReverseSides] = useAtom(isReverseSidesAtom);
   const [isSaveParticipantsForPools, setIsSaveParticipantsForPools] = useAtom(
     isSaveParticipantsForPoolsAtom,
@@ -1333,6 +1337,14 @@ export default function SettingsScreen() {
             setValue={setIsReverseSides}
             titleStyle={{ maxWidth: 200 }}
           />
+
+          <Switch
+            title={t("recordVideoTimerStart")}
+            value={isRecordVideoTimerStart}
+            setValue={setIsRecordVideoTimerStart}
+            titleStyle={{ maxWidth: 200 }}
+          />
+
           {!isTriathlon && (
             <>
               <Button

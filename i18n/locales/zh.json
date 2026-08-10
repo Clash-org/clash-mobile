@@ -317,5 +317,30 @@
   "poolSettings": "设置擂台",
   "enterWeaponName": "输入武器名称",
   "arena": "竞技场",
-  "profile": "个人资料"
+  "profile": "个人资料",
+  "videoRecorder": {
+    "ready": "准备就绪",
+    "start": "开始录制",
+    "permissions": {
+      "title": "权限",
+      "camera": "录制视频需要相机权限",
+      "cameraDenied": "无法访问相机",
+      "microphone": "录制音频需要麦克风权限",
+      "media": "保存视频需要相册权限",
+      "mediaDenied": "无法访问相册",
+      "error": "获取权限失败",
+      "stepCamera": "📷 步骤 1: 相机权限",
+      "stepMicrophone": "🎤 步骤 2: 麦克风权限",
+      "stepMedia": "🖼️ 步骤 3: 相册权限",
+      "allowCamera": "允许访问相机",
+      "allowMicrophone": "允许访问麦克风",
+      "allowMedia": "允许访问相册"
+    },
+    "errors": {
+      "recording": "录制视频失败",
+      "stop": "停止录制失败",
+      "camera": "相机问题"
+    }
+  },
+  "recordVideoTimerStart": "定时器启动时录制视频"
 }

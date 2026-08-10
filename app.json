@@ -21,7 +21,9 @@
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
-        "android.permission.REQUEST_INSTALL_PACKAGES"
+        "android.permission.REQUEST_INSTALL_PACKAGES",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
       ],
       "package": "com.artem72.clash"
     },
@@ -41,7 +43,30 @@
         }
       ],
       "expo-localization",
-      "expo-audio",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Разрешите доступ к камере для записи видео",
+          "microphonePermission": "Разрешите доступ к микрофону для записи звука",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Разрешите доступ к микрофону для записи звука",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Разрешите доступ к галерее для сохранения видео",
+          "savePhotosPermission": "Разрешите сохранение видео в галерею",
+          "microphonePermission": "Разрешите доступ к микрофону для записи звука",
+          "isAccessMediaLocationEnabled": true
+        }
+      ],
       [
         "expo-file-system",
         {

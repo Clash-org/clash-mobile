@@ -141,3 +141,5 @@ export const totalRoundsAtom = atom<number[]>([]);
 export const rankParticipantsAtom = atom<ParticipantType[]>([]);
 
 export const idsRDAtom = atom(new Map<string, number>());
+
+export const isRecordVideoTimerStartAtom = atom(false);

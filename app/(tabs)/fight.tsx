@@ -13,6 +13,7 @@ import Button from "@/components/ui/Button";
 import Counter from "@/components/ui/Counter";
 import ModalWindow from "@/components/ui/ModalWindow";
 import SelectPair from "@/components/ui/SelectPair";
+import VideoRecorder from "@/components/ui/VideoRecorder";
 import { Colors, Fonts } from "@/constants";
 import useBellSound from "@/hooks/useBellSound";
 import {
@@ -25,6 +26,7 @@ import {
   hitZonesAtom,
   isGroupBattleAtom,
   isPoolEndAtom,
+  isRecordVideoTimerStartAtom,
   isReverseSidesAtom,
   isRunningAtom,
   playoffAtom,
@@ -49,6 +51,8 @@ import {
 import { incWin } from "@/utils/incWin";
 import {
   ChevronsRight,
+  Eye,
+  EyeClosed,
   History,
   Medal,
   Minus,
@@ -65,6 +69,7 @@ export default function FightScreen() {
   const { playSound, stopSound } = useBellSound();
   const [isGroupBattle] = useAtom(isGroupBattleAtom);
   const [isReverseSides] = useAtom(isReverseSidesAtom);
+  const [isRecordVideoTimerStart] = useAtom(isRecordVideoTimerStartAtom);
   const [currentPairIndex, setCurrentPairIndex] = useAtom(currentPairIndexAtom);
   const [currentPoolIndex] = useAtom(currentPoolIndexAtom);
   const [virtualPairIndex, setVirtualPairIndex] = useAtom(virtualPairIndexAtom);
@@ -93,6 +98,9 @@ export default function FightScreen() {
   const [isHistory, setIsHistory] = useState(false);
   const [timeLeft, setTimeLeft] = useState(fightTime);
   const [isFinished, setIsFinished] = useState(false);
+  const [score1Local, setScore1Local] = useState(0);
+  const [score2Local, setScore2Local] = useState(0);
+  const [isWarningsShow, setIsWarningsShow] = useState(true);
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -437,6 +445,8 @@ export default function FightScreen() {
       setWarnings2(0);
       setDoubleHits(0);
     }
+    setScore1Local(0);
+    setScore2Local(0);
     setTimeLeft(fightTime);
     setIsRunning(false);
     setHistory([]);
@@ -537,6 +547,7 @@ export default function FightScreen() {
       name: redName,
       score: score1,
       setScore: setScore1,
+      setLocalScore: isGroupBattle ? setScore1Local : undefined,
       protests: protests1,
       setProtests: setProtests1,
       warnings: warnings1,
@@ -547,6 +558,7 @@ export default function FightScreen() {
       name: blueName,
       score: score2,
       setScore: setScore2,
+      setLocalScore: isGroupBattle ? setScore2Local : undefined,
       protests: protests2,
       setProtests: setProtests2,
       warnings: warnings2,
@@ -557,6 +569,23 @@ export default function FightScreen() {
 
   return (
     <View style={[styles.container, isReverseSides && styles.reverse]}>
+      {isRecordVideoTimerStart && (
+        <VideoRecorder
+          isRecording={isRunning}
+          currentTime={formatTime(timeLeft)}
+          setStartRecording={setIsRunning}
+        />
+      )}
+      <TouchableOpacity
+        onPress={() => setIsWarningsShow(!isWarningsShow)}
+        style={[styles.controlButton, styles.warningsArrow]}
+      >
+        {isWarningsShow ? (
+          <Eye color={Colors.fg} size={25} />
+        ) : (
+          <EyeClosed color={Colors.fg} size={25} />
+        )}
+      </TouchableOpacity>
       {fighterData.map((data, i) => (
         <View
           key={i}
@@ -572,15 +601,33 @@ export default function FightScreen() {
                 </Text>
               ))}
           </Text>
-          <Text style={styles.score}>{data.score}</Text>
+          <View style={styles.plusMinusWrap}>
+            {isGroupBattle && data.side === "red" ? (
+              <Text style={[styles.scoreLocal, { left: 100 }]}>
+                {score1Local}
+              </Text>
+            ) : (
+              <></>
+            )}
+            <Text style={styles.score}>{data.score}</Text>
+            {isGroupBattle && data.side === "blue" ? (
+              <Text style={[styles.scoreLocal, { left: -30 }]}>
+                {score2Local}
+              </Text>
+            ) : (
+              <></>
+            )}
+          </View>
 
           {Object.entries(hitZones).map(([zone, pts]) => (
             <TouchableOpacity
               key={`${i}-${zone}`}
               style={styles.zoneBtn}
-              onPress={() =>
-                addPoints(data.setScore, zone as keyof typeof hitZones)
-              }
+              onPress={() => {
+                addPoints(data.setScore, zone as keyof typeof hitZones);
+                if (data.setLocalScore)
+                  addPoints(data.setLocalScore, zone as keyof typeof hitZones);
+              }}
             >
               <Text style={styles.zoneTxt}>
                 {t(zone)} (+{pts})
@@ -591,32 +638,40 @@ export default function FightScreen() {
           <View style={styles.plusMinusWrap}>
             <TouchableOpacity
               style={[styles.zoneBtn, styles.zoneBtnZero]}
-              onPress={() => removePoints(data.setScore)}
+              onPress={() => {
+                removePoints(data.setScore);
+                if (data.setLocalScore) removePoints(data.setLocalScore);
+              }}
             >
               <Minus size={28} color={Colors.fg} />
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.zoneBtn, styles.zoneBtnZero]}
-              onPress={() => data.setScore((s) => s + 1)}
+              onPress={() => {
+                data.setScore((s) => s + 1);
+                if (data.setLocalScore) data.setLocalScore((s) => s + 1);
+              }}
             >
               <Plus size={28} color={Colors.fg} />
             </TouchableOpacity>
           </View>
 
-          <View style={styles.warnings}>
-            <Counter
-              label={t("protests")}
-              value={data.protests}
-              onInc={data.setProtests}
-              onDec={data.setProtests}
-            />
-            <Counter
-              label={t("warnings")}
-              value={data.warnings}
-              onInc={data.setWarnings}
-              onDec={data.setWarnings}
-            />
-          </View>
+          {isWarningsShow && (
+            <View style={styles.warnings}>
+              <Counter
+                label={t("protests")}
+                value={data.protests}
+                onInc={data.setProtests}
+                onDec={data.setProtests}
+              />
+              <Counter
+                label={t("warnings")}
+                value={data.warnings}
+                onInc={data.setWarnings}
+                onDec={data.setWarnings}
+              />
+            </View>
+          )}
         </View>
       ))}
 
@@ -798,10 +853,21 @@ const styles = StyleSheet.create({
     lineHeight: 55,
     fontFamily: Fonts.bold,
     marginTop: -20,
+    width: 100,
+    textAlign: "center",
+  },
+  scoreLocal: {
+    color: Colors.fg,
+    fontSize: 28,
+    fontFamily: Fonts.bold,
+    marginTop: -10,
+    position: "absolute",
+    opacity: 0.5,
   },
   plusMinusWrap: {
     display: "flex",
     flexDirection: "row",
+    position: "relative",
     gap: 5,
   },
   zoneBtn: {
@@ -852,7 +918,6 @@ const styles = StyleSheet.create({
   timerWrap: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
     marginBottom: 8,
   },
   timerButton: {
@@ -872,6 +937,8 @@ const styles = StyleSheet.create({
     color: Colors.fg,
     fontSize: 36,
     fontFamily: Fonts.bold,
+    minWidth: 90,
+    textAlign: "center",
   },
   controls: {
     flexDirection: "row",
@@ -906,5 +973,14 @@ const styles = StyleSheet.create({
     color: Colors.fg,
     fontSize: 16,
     fontFamily: Fonts.regular,
+  },
+  warningsArrow: {
+    position: "absolute",
+    left: "50%",
+    transform: [{ translateX: "-50%" }],
+    top: "61.5%",
+    zIndex: 10,
+    backgroundColor: Colors.surface2,
+    minWidth: 50,
   },
 });
