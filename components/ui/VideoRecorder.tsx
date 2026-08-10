@@ -5,13 +5,7 @@ import * as MediaLibrary from "expo-media-library";
 import * as ScreenOrientation from "expo-screen-orientation";
 import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-    Dimensions,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-} from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import ModalWindow from "./ModalWindow";
 
 type VideoRecorderProps = {
@@ -55,7 +49,7 @@ function VideoRecorder({
       startRecording();
       ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
     } else if (!isRecording && isCameraReady) {
-      stopRecording();
+      handleStopPress();
     }
   }, [isRecording, isCameraReady, hasAllPermissions]);
 
@@ -218,25 +212,14 @@ function VideoRecorder({
     setStartRecording(false);
   };
 
-  // Показываем загрузку пока проверяются разрешения
-  if (
-    !cameraPermission ||
-    audioPermission === null ||
-    mediaLibraryPermission === null
-  ) {
-    return (
-      <View style={[styles.container, styles.centerContent]}>
-        <Text style={styles.errorText}>{t("videoRecorder.loading")}</Text>
-      </View>
-    );
-  }
-
   return (
     <>
       <View
         style={[
           styles.container,
-          isRecording ? { width: "100%", height: "100%" } : { display: "none" },
+          isRecording
+            ? { minWidth: "100%", height: "100%" }
+            : { display: "none" },
         ]}
       >
         <CameraView
@@ -335,17 +318,10 @@ const styles = StyleSheet.create({
     top: 0,
     position: "absolute",
   },
-  centerContent: {
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    width: "100%",
-    height: "92%",
-  },
   camera: {
     flex: 1,
-    width: Dimensions.get("window").width,
-    height: Dimensions.get("window").height,
+    minWidth: "100%",
+    minHeight: "100%",
   },
   bottomOverlay: {
     position: "absolute",

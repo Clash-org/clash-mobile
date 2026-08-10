@@ -78,7 +78,7 @@ import {
   getTopThreeFighters,
   getTriathlonWinnersFromDuels,
   getWinnersRobin,
-  getWinnersSwiss
+  getWinnersSwiss,
 } from "@/utils/matchesHandlers";
 import Toast from "react-native-toast-message";
 
@@ -689,6 +689,7 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingTop: 50,
     paddingBottom: 90,
+    alignItems: "center",
   },
   fullButton: {
     width: "100%",

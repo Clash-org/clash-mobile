@@ -1,5 +1,6 @@
 import { Colors, Fonts } from "@/constants";
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 interface TableProps {
@@ -16,10 +17,11 @@ export default function Table({
   titles,
   customRenderers = {},
 }: TableProps) {
+  const { t } = useTranslation();
   if (!data || data.length === 0) {
     return (
       <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>Нет данных</Text>
+        <Text style={styles.emptyText}>{t("noData")}</Text>
       </View>
     );
   }

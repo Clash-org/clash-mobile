@@ -342,5 +342,6 @@
       "camera": "相机问题"
     }
   },
-  "recordVideoTimerStart": "定时器启动时录制视频"
+  "recordVideoTimerStart": "定时器启动时录制视频",
+  "noData": "没有可用的数据"
 }
