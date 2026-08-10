@@ -25,7 +25,6 @@ function VideoRecorder({
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [mediaLibraryPermission, requestMediaLibraryPermission] =
     MediaLibrary.usePermissions();
-  const [audioPermission, setAudioPermission] = useState<boolean | null>(null);
   const [isCameraReady, setIsCameraReady] = useState<boolean>(false);
   const [hasAllPermissions, setHasAllPermissions] = useState<boolean>(false);
   const [showPermissionModal, setShowPermissionModal] =
@@ -46,8 +45,8 @@ function VideoRecorder({
   // Управление записью
   useEffect(() => {
     if (isRecording && isCameraReady && hasAllPermissions) {
-      startRecording();
       ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+      setTimeout(() => startRecording(), 500);
     } else if (!isRecording && isCameraReady) {
       handleStopPress();
     }
@@ -85,7 +84,6 @@ function VideoRecorder({
 
       // Шаг 2: Микрофон
       const audioStatus = await requestRecordingPermissionsAsync();
-      setAudioPermission(audioStatus.granted);
 
       if (!audioStatus.granted) {
         setPermissionStep("microphone");
