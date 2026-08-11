@@ -1,6 +1,7 @@
 import { Colors, Fonts } from "@/constants";
 import { requestRecordingPermissionsAsync } from "expo-audio";
 import { CameraView, useCameraPermissions } from "expo-camera";
+import * as ImageManipulator from "expo-image-manipulator";
 import * as MediaLibrary from "expo-media-library";
 import * as ScreenOrientation from "expo-screen-orientation";
 import React, { useEffect, useRef, useState } from "react";
@@ -46,7 +47,7 @@ function VideoRecorder({
   useEffect(() => {
     if (isRecording && isCameraReady && hasAllPermissions) {
       ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
-      setTimeout(() => startRecording(), 500);
+      startRecording();
     } else if (!isRecording && isCameraReady) {
       handleStopPress();
     }
@@ -153,6 +154,26 @@ function VideoRecorder({
     }
   };
 
+  const rotateVideo = async (videoUri: string) => {
+    try {
+      console.log("Rotating video:", videoUri);
+
+      // Поворачиваем видео на 90 градусов (в альбомную ориентацию)
+      const rotatedResult = await ImageManipulator.manipulateAsync(
+        videoUri,
+        [{ rotate: 90 }], // Поворот на 90 градусов
+        { compress: 1 },
+      );
+
+      console.log("Video rotated to:", rotatedResult.uri);
+      return rotatedResult.uri;
+    } catch (error) {
+      console.error("Error rotating video:", error);
+      // В случае ошибки возвращаем оригинальный URI
+      return videoUri;
+    }
+  };
+
   const startRecording = async () => {
     if (!cameraRef.current) return;
 
@@ -160,8 +181,9 @@ function VideoRecorder({
       const video = await cameraRef.current.recordAsync();
 
       if (video) {
+        const rotatedUri = await rotateVideo(video.uri);
         try {
-          const savedUri = await saveVideoToGallery(video.uri);
+          const savedUri = await saveVideoToGallery(rotatedUri);
           onVideoSaved?.(savedUri);
         } catch (saveError) {
           console.error("Failed to save to gallery:", saveError);
